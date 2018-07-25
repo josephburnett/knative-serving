@@ -1,9 +1,12 @@
 /*
-Copyright 2018 The Knative Authors.
+Copyright 2018 The Knative Authors
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
+
     http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -188,42 +191,6 @@ func TestTypicalRouteFlow(t *testing.T) {
 	checkConditionSucceededRoute(r.Status, RouteConditionReady, t)
 }
 
-func TestLatestRevisionDeletedFlow(t *testing.T) {
-	r := &Route{}
-	r.Status.InitializeConditions()
-	checkConditionOngoingRoute(r.Status, RouteConditionAllTrafficAssigned, t)
-	checkConditionOngoingRoute(r.Status, RouteConditionReady, t)
-
-	r.Status.MarkTrafficAssigned()
-	checkConditionSucceededRoute(r.Status, RouteConditionAllTrafficAssigned, t)
-	checkConditionSucceededRoute(r.Status, RouteConditionReady, t)
-
-	r.Status.MarkDeletedLatestRevisionTarget("my-latest-ready-was-deleted")
-	checkConditionFailedRoute(r.Status, RouteConditionAllTrafficAssigned, t)
-	checkConditionFailedRoute(r.Status, RouteConditionReady, t)
-}
-
-func TestLatestRevisionDeletedThenFixedFlow(t *testing.T) {
-	r := &Route{}
-	r.Status.InitializeConditions()
-	checkConditionOngoingRoute(r.Status, RouteConditionAllTrafficAssigned, t)
-	checkConditionOngoingRoute(r.Status, RouteConditionReady, t)
-
-	r.Status.MarkTrafficAssigned()
-	checkConditionSucceededRoute(r.Status, RouteConditionAllTrafficAssigned, t)
-	checkConditionSucceededRoute(r.Status, RouteConditionReady, t)
-
-	// LatestReadyRevision is deleted.
-	r.Status.MarkDeletedLatestRevisionTarget("my-latest-ready-was-deleted")
-	checkConditionFailedRoute(r.Status, RouteConditionAllTrafficAssigned, t)
-	checkConditionFailedRoute(r.Status, RouteConditionReady, t)
-
-	// But a new LatestReadyRevision is added back.
-	r.Status.MarkTrafficAssigned()
-	checkConditionSucceededRoute(r.Status, RouteConditionAllTrafficAssigned, t)
-	checkConditionSucceededRoute(r.Status, RouteConditionReady, t)
-}
-
 func TestTrafficNotAssignedFlow(t *testing.T) {
 	r := &Route{}
 	r.Status.InitializeConditions()
@@ -241,7 +208,51 @@ func TestTargetConfigurationNotYetReadyFlow(t *testing.T) {
 	checkConditionOngoingRoute(r.Status, RouteConditionAllTrafficAssigned, t)
 	checkConditionOngoingRoute(r.Status, RouteConditionReady, t)
 
-	r.Status.MarkUnreadyConfigurationTarget("i-have-no-ready-revision")
+	r.Status.MarkConfigurationNotReady("i-have-no-ready-revision")
+	checkConditionOngoingRoute(r.Status, RouteConditionAllTrafficAssigned, t)
+	checkConditionOngoingRoute(r.Status, RouteConditionReady, t)
+}
+
+func TestUnknownErrorWhenConfiguringTraffic(t *testing.T) {
+	r := &Route{}
+	r.Status.InitializeConditions()
+	checkConditionOngoingRoute(r.Status, RouteConditionAllTrafficAssigned, t)
+	checkConditionOngoingRoute(r.Status, RouteConditionReady, t)
+
+	r.Status.MarkUnknownTrafficError("unknown-error")
+	checkConditionOngoingRoute(r.Status, RouteConditionAllTrafficAssigned, t)
+	checkConditionOngoingRoute(r.Status, RouteConditionReady, t)
+}
+
+func TestTargetConfigurationFailedToBeReadyFlow(t *testing.T) {
+	r := &Route{}
+	r.Status.InitializeConditions()
+	checkConditionOngoingRoute(r.Status, RouteConditionAllTrafficAssigned, t)
+	checkConditionOngoingRoute(r.Status, RouteConditionReady, t)
+
+	r.Status.MarkConfigurationFailed("permanently-failed")
+	checkConditionFailedRoute(r.Status, RouteConditionAllTrafficAssigned, t)
+	checkConditionFailedRoute(r.Status, RouteConditionReady, t)
+}
+
+func TestTargetRevisionNotYetReadyFlow(t *testing.T) {
+	r := &Route{}
+	r.Status.InitializeConditions()
+	checkConditionOngoingRoute(r.Status, RouteConditionAllTrafficAssigned, t)
+	checkConditionOngoingRoute(r.Status, RouteConditionReady, t)
+
+	r.Status.MarkRevisionNotReady("not-yet-ready")
+	checkConditionOngoingRoute(r.Status, RouteConditionAllTrafficAssigned, t)
+	checkConditionOngoingRoute(r.Status, RouteConditionReady, t)
+}
+
+func TestTargetRevisionFailedToBeReadyFlow(t *testing.T) {
+	r := &Route{}
+	r.Status.InitializeConditions()
+	checkConditionOngoingRoute(r.Status, RouteConditionAllTrafficAssigned, t)
+	checkConditionOngoingRoute(r.Status, RouteConditionReady, t)
+
+	r.Status.MarkRevisionFailed("cannot-find-image")
 	checkConditionFailedRoute(r.Status, RouteConditionAllTrafficAssigned, t)
 	checkConditionFailedRoute(r.Status, RouteConditionReady, t)
 }

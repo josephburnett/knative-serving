@@ -31,8 +31,8 @@ import (
 	"github.com/knative/serving/pkg/controller"
 	"github.com/knative/serving/pkg/controller/service/resources"
 
+	. "github.com/knative/pkg/logging/testing"
 	. "github.com/knative/serving/pkg/controller/testing"
-	. "github.com/knative/serving/pkg/logging/testing"
 )
 
 var (
@@ -48,10 +48,10 @@ var (
 	}
 
 	initialConditions = []v1alpha1.ServiceCondition{{
-		Type:   v1alpha1.ServiceConditionReady,
+		Type:   v1alpha1.ServiceConditionConfigurationsReady,
 		Status: corev1.ConditionUnknown,
 	}, {
-		Type:   v1alpha1.ServiceConditionConfigurationsReady,
+		Type:   v1alpha1.ServiceConditionReady,
 		Status: corev1.ConditionUnknown,
 	}, {
 		Type:   v1alpha1.ServiceConditionRoutesReady,
@@ -228,9 +228,9 @@ func TestReconcile(t *testing.T) {
 		}},
 	}}
 
-	table.Test(t, func(listers *Listers, opt controller.Options) controller.Interface {
-		return &Controller{
-			Base:                controller.NewBase(opt, controllerAgentName, "Services"),
+	table.Test(t, func(listers *Listers, opt controller.ReconcileOptions) controller.Reconciler {
+		return &Reconciler{
+			Base:                controller.NewBase(opt, controllerAgentName),
 			serviceLister:       listers.GetServiceLister(),
 			configurationLister: listers.GetConfigurationLister(),
 			routeLister:         listers.GetRouteLister(),
@@ -247,7 +247,7 @@ func TestNew(t *testing.T) {
 	routeInformer := servingInformer.Serving().V1alpha1().Routes()
 	configurationInformer := servingInformer.Serving().V1alpha1().Configurations()
 
-	c := NewController(controller.Options{
+	c := NewController(controller.ReconcileOptions{
 		KubeClientSet:    kubeClient,
 		ServingClientSet: servingClient,
 		Logger:           TestLogger(t),

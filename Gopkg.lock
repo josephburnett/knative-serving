@@ -27,12 +27,6 @@
   version = "v10.8.1"
 
 [[projects]]
-  name = "github.com/Microsoft/go-winio"
-  packages = ["."]
-  revision = "7da180ee92d8bd8bb8c37fc560e673e6557c392f"
-  version = "v0.4.7"
-
-[[projects]]
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
@@ -86,44 +80,25 @@
   version = "v3.2.0"
 
 [[projects]]
-  name = "github.com/docker/distribution"
-  packages = [
-    "digest",
-    "reference"
-  ]
-  revision = "48294d928ced5dd9b378f7fd7c6f5da3ff3f2c89"
-  version = "v2.6.2"
-
-[[projects]]
   name = "github.com/docker/docker"
   packages = [
     "api/types",
     "api/types/blkiodev",
     "api/types/container",
-    "api/types/events",
     "api/types/filters",
     "api/types/mount",
     "api/types/network",
-    "api/types/reference",
     "api/types/registry",
     "api/types/strslice",
     "api/types/swarm",
-    "api/types/time",
-    "api/types/versions",
-    "api/types/volume",
-    "client",
-    "pkg/tlsconfig"
+    "api/types/versions"
   ]
   revision = "092cba3727bb9b4a2f0e922cd6c0f93ea270e363"
   version = "v1.13.1"
 
 [[projects]]
   name = "github.com/docker/go-connections"
-  packages = [
-    "nat",
-    "sockets",
-    "tlsconfig"
-  ]
+  packages = ["nat"]
   revision = "3ede32e2033de7505e6500d6c868c2b9ed9f169d"
   version = "v0.3.0"
 
@@ -132,12 +107,6 @@
   packages = ["."]
   revision = "47565b4f722fb6ceae66b95f853feed578a4a51c"
   version = "v0.3.3"
-
-[[projects]]
-  name = "github.com/fsnotify/fsnotify"
-  packages = ["."]
-  revision = "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9"
-  version = "v1.4.7"
 
 [[projects]]
   name = "github.com/ghodss/yaml"
@@ -199,37 +168,18 @@
 [[projects]]
   name = "github.com/google/go-containerregistry"
   packages = [
-    "authn",
-    "cmd/ko",
-    "ko/build",
-    "ko/publish",
-    "ko/resolve",
-    "name",
-    "v1",
-    "v1/daemon",
-    "v1/empty",
-    "v1/mutate",
-    "v1/partial",
-    "v1/random",
-    "v1/remote",
-    "v1/remote/transport",
-    "v1/tarball",
-    "v1/types",
-    "v1/v1util"
+    "pkg/authn",
+    "pkg/authn/k8schain",
+    "pkg/name",
+    "pkg/v1",
+    "pkg/v1/partial",
+    "pkg/v1/random",
+    "pkg/v1/remote",
+    "pkg/v1/remote/transport",
+    "pkg/v1/types",
+    "pkg/v1/v1util"
   ]
-  revision = "8bdfdfc3bd4146f40b7709f6b1b7d979a3385da8"
-
-[[projects]]
-  name = "github.com/google/go-github"
-  packages = ["github"]
-  revision = "e48060a28fac52d0f1cb758bc8b87c07bac4a87d"
-  version = "v15.0.0"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/google/go-querystring"
-  packages = ["query"]
-  revision = "53e6ce116135b80d037921a7fdd5138cf32d7a8a"
+  revision = "0eeba96f66fdd1873f2ec7f3764ee3b58c5a050c"
 
 [[projects]]
   branch = "master"
@@ -248,18 +198,6 @@
   version = "v0.1.0"
 
 [[projects]]
-  name = "github.com/gorilla/context"
-  packages = ["."]
-  revision = "1ea25387ff6f684839d82767c1733ff4d4d15d0a"
-  version = "v1.1"
-
-[[projects]]
-  name = "github.com/gorilla/mux"
-  packages = ["."]
-  revision = "53c1911da2b537f792e7cafcb446b05ffe33b996"
-  version = "v1.6.1"
-
-[[projects]]
   name = "github.com/gorilla/websocket"
   packages = ["."]
   revision = "ea4d1f681babbce9545c9c5f3d5194a789c89f5b"
@@ -276,23 +214,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/hashicorp/hcl"
-  packages = [
-    ".",
-    "hcl/ast",
-    "hcl/parser",
-    "hcl/printer",
-    "hcl/scanner",
-    "hcl/strconv",
-    "hcl/token",
-    "json/parser",
-    "json/scanner",
-    "json/token"
-  ]
-  revision = "ef8a98b0bbce4a65b5aa4c368430a80ddc533168"
-
-[[projects]]
-  branch = "master"
   name = "github.com/howeyc/gopass"
   packages = ["."]
   revision = "bf9dde6d0d2c004a008c27aaee91170c786f6db8"
@@ -302,12 +223,6 @@
   packages = ["."]
   revision = "f1ac5984e69fed03e0574a92f70c59f132616ea2"
   version = "0.3.0"
-
-[[projects]]
-  name = "github.com/inconshreveable/mousetrap"
-  packages = ["."]
-  revision = "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
-  version = "v1.0"
 
 [[projects]]
   name = "github.com/jmespath/go-jmespath"
@@ -339,10 +254,18 @@
   revision = "5c1d8c8469d1ed34b2aecf4c2305b3a57fff2ee3"
 
 [[projects]]
-  name = "github.com/magiconair/properties"
-  packages = ["."]
-  revision = "c2353362d570a7bfa228149c62842019201cfb71"
-  version = "v1.8.0"
+  branch = "master"
+  name = "github.com/knative/pkg"
+  packages = [
+    "apis",
+    "configmap",
+    "logging",
+    "logging/logkey",
+    "logging/testing",
+    "signals",
+    "webhook"
+  ]
+  revision = "484160f313516c21c2c619e30a515e4aa600445a"
 
 [[projects]]
   branch = "master"
@@ -351,47 +274,10 @@
   revision = "81af80346b1a01caae0cbc27fd3c1ba5b11e189f"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/mattmoor/k8schain"
-  packages = ["."]
-  revision = "9f8b5c528673cdc2e8ebac0b2930ad1c00a7cb35"
-
-[[projects]]
   name = "github.com/matttproud/golang_protobuf_extensions"
   packages = ["pbutil"]
   revision = "3247c84500bff8d9fb6d579d800f20b3e091582c"
   version = "v1.0.0"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/mitchellh/mapstructure"
-  packages = ["."]
-  revision = "bb74f1db0675b241733089d5a1faa5dd8b0ef57b"
-
-[[projects]]
-  name = "github.com/openzipkin/zipkin-go"
-  packages = [
-    ".",
-    "idgenerator",
-    "model",
-    "propagation",
-    "reporter",
-    "reporter/http"
-  ]
-  revision = "f197ec29e729f226d23370ea60f0e49b8f44ccf4"
-  version = "v0.1.0"
-
-[[projects]]
-  name = "github.com/pelletier/go-toml"
-  packages = ["."]
-  revision = "acdc4509485b587f5e675510c4f2c63e90ff68a8"
-  version = "v1.1.0"
-
-[[projects]]
-  name = "github.com/pkg/errors"
-  packages = ["."]
-  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
-  version = "v0.8.0"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -430,58 +316,22 @@
   revision = "282c8707aa210456a825798969cc27edda34992a"
 
 [[projects]]
-  name = "github.com/spf13/afero"
-  packages = [
-    ".",
-    "mem"
-  ]
-  revision = "63644898a8da0bc22138abf860edaf5277b6102e"
-  version = "v1.1.0"
-
-[[projects]]
-  name = "github.com/spf13/cast"
-  packages = ["."]
-  revision = "8965335b8c7107321228e3e3702cab9832751bac"
-  version = "v1.2.0"
-
-[[projects]]
-  name = "github.com/spf13/cobra"
-  packages = ["."]
-  revision = "615425954c3b0d9485a7027d4d451fdcdfdee84e"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/spf13/jwalterweatherman"
-  packages = ["."]
-  revision = "7c0cea34c8ece3fbeb2b27ab9b59511d360fb394"
-
-[[projects]]
   name = "github.com/spf13/pflag"
   packages = ["."]
   revision = "583c0c0531f06d5278b7d917446061adc344b5cd"
 
 [[projects]]
-  name = "github.com/spf13/viper"
-  packages = ["."]
-  revision = "b5e8006cbee93ec955a89ab31e0e3ce3204f3736"
-  version = "v1.0.2"
-
-[[projects]]
   name = "go.opencensus.io"
   packages = [
     "exporter/prometheus",
-    "exporter/zipkin",
     "internal",
     "internal/tagencoding",
-    "plugin/ochttp",
-    "plugin/ochttp/propagation/b3",
     "stats",
     "stats/internal",
     "stats/view",
     "tag",
     "trace",
-    "trace/internal",
-    "trace/propagation"
+    "trace/internal"
   ]
   revision = "0095aec66ae14801c6711210f6f0716411cefdd3"
   version = "v0.8.0"
@@ -530,9 +380,7 @@
     "http/httpguts",
     "http2",
     "http2/hpack",
-    "idna",
-    "internal/socks",
-    "proxy"
+    "idna"
   ]
   revision = "db08ff08e8622530d9ed3a0e8ac279f6d4c02196"
 
@@ -617,15 +465,6 @@
   version = "v1.0.0"
 
 [[projects]]
-  name = "gopkg.in/go-playground/webhooks.v3"
-  packages = [
-    ".",
-    "github"
-  ]
-  revision = "c271ec3e322dab2e93990e8c5287fe5d5d1209ba"
-  version = "v3.8.0"
-
-[[projects]]
   name = "gopkg.in/inf.v0"
   packages = ["."]
   revision = "3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4"
@@ -671,7 +510,7 @@
     "storage/v1beta1"
   ]
   revision = "73d903622b7391f3312dcbac6483fed484e185f8"
-  version = "kubernetes-1.10.0-beta.3"
+  version = "kubernetes-1.10.0"
 
 [[projects]]
   name = "k8s.io/apimachinery"
@@ -723,7 +562,7 @@
     "third_party/forked/golang/reflect"
   ]
   revision = "302974c03f7e50f16561ba237db776ab93594ef6"
-  version = "kubernetes-1.10.0-beta.1"
+  version = "kubernetes-1.10.0"
 
 [[projects]]
   branch = "vpa-release-0.1"
@@ -927,7 +766,7 @@
     "pkg/util"
   ]
   revision = "7ead8f38b01cf8653249f5af80ce7b2c8aba12e2"
-  version = "kubernetes-1.10.0-beta.1"
+  version = "kubernetes-1.10.0"
 
 [[projects]]
   branch = "master"
@@ -966,6 +805,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "431ad47f0253f68661f750381a990e8e19ee70e6f3fae106cf2445fb43f74999"
+  inputs-digest = "ac2a2dd0ad8c194db279e6dc08fa8fd51a42ceeacaec3e1c6e2c417b66db0465"
   solver-name = "gps-cdcl"
   solver-version = 1

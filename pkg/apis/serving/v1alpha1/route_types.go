@@ -20,10 +20,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/knative/pkg/apis"
 )
 
 // +genclient
@@ -50,8 +53,8 @@ type Route struct {
 }
 
 // Check that Route may be validated and defaulted.
-var _ Validatable = (*Route)(nil)
-var _ Defaultable = (*Route)(nil)
+var _ apis.Validatable = (*Route)(nil)
+var _ apis.Defaultable = (*Route)(nil)
 
 // TrafficTarget holds a single entry of the routing table for a Route.
 type TrafficTarget struct {
@@ -101,7 +104,9 @@ type RouteCondition struct {
 	Status corev1.ConditionStatus `json:"status" description:"status of the condition, one of True, False, Unknown"`
 
 	// +optional
-	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty" description:"last time the condition transit from one status to another"`
+	// We use VolatileTime in place of metav1.Time to exclude this from creating equality.Semantic
+	// differences (all other things held constant).
+	LastTransitionTime VolatileTime `json:"lastTransitionTime,omitempty" description:"last time the condition transit from one status to another"`
 
 	// +optional
 	Reason string `json:"reason,omitempty" description:"one-word CamelCase reason for the condition's last transition"`
@@ -124,12 +129,37 @@ const (
 	RouteConditionAllTrafficAssigned RouteConditionType = "AllTrafficAssigned"
 )
 
+type RouteConditionSlice []RouteCondition
+
+// Len implements sort.Interface
+func (rsc RouteConditionSlice) Len() int {
+	return len(rsc)
+}
+
+// Less implements sort.Interface
+func (rsc RouteConditionSlice) Less(i, j int) bool {
+	return rsc[i].Type < rsc[j].Type
+}
+
+// Swap implements sort.Interface
+func (rsc RouteConditionSlice) Swap(i, j int) {
+	rsc[i], rsc[j] = rsc[j], rsc[i]
+}
+
+var _ sort.Interface = (RouteConditionSlice)(nil)
+
 // RouteStatus communicates the observed state of the Route (from the controller).
 type RouteStatus struct {
 	// Domain holds the top-level domain that will distribute traffic over the provided targets.
 	// It generally has the form {route-name}.{route-namespace}.{cluster-level-suffix}
 	// +optional
 	Domain string `json:"domain,omitempty"`
+
+	// DomainInternal holds the top-level domain that will distribute traffic over the provided
+	// targets from inside the cluster. It generally has the form
+	// {route-name}.{route-namespace}.svc.cluster.local
+	// +optional
+	DomainInternal string `json:"domainInternal,omitempty"`
 
 	// Traffic holds the configured traffic distribution.
 	// These entries will always contain RevisionName references.
@@ -142,7 +172,7 @@ type RouteStatus struct {
 	// reconciliation processes that bring the "spec" inline with the observed
 	// state of the world.
 	// +optional
-	Conditions []RouteCondition `json:"conditions,omitempty"`
+	Conditions RouteConditionSlice `json:"conditions,omitempty"`
 
 	// ObservedGeneration is the 'Generation' of the Configuration that
 	// was last processed by the controller. The observed generation is updated
@@ -195,7 +225,7 @@ func (rs *RouteStatus) setCondition(new *RouteCondition) {
 	}
 
 	t := new.Type
-	var conditions []RouteCondition
+	var conditions RouteConditionSlice
 	for _, cond := range rs.Conditions {
 		if cond.Type != t {
 			conditions = append(conditions, cond)
@@ -207,18 +237,9 @@ func (rs *RouteStatus) setCondition(new *RouteCondition) {
 			}
 		}
 	}
-	new.LastTransitionTime = metav1.NewTime(time.Now())
+	new.LastTransitionTime = VolatileTime{metav1.NewTime(time.Now())}
 	conditions = append(conditions, *new)
-	rs.Conditions = conditions
-}
-
-func (rs *RouteStatus) RemoveCondition(t RouteConditionType) {
-	var conditions []RouteCondition
-	for _, cond := range rs.Conditions {
-		if cond.Type != t {
-			conditions = append(conditions, cond)
-		}
-	}
+	sort.Sort(conditions)
 	rs.Conditions = conditions
 }
 
@@ -244,7 +265,32 @@ func (rs *RouteStatus) MarkTrafficAssigned() {
 	rs.checkAndMarkReady()
 }
 
-func (rs *RouteStatus) markTrafficNotAssigned(reason, msg string) {
+func (rs *RouteStatus) markTrafficTargetNotReady(reason, msg string) {
+	rs.setCondition(&RouteCondition{
+		Type:    RouteConditionAllTrafficAssigned,
+		Status:  corev1.ConditionUnknown,
+		Reason:  reason,
+		Message: msg,
+	})
+	// TODO(tcnghia): when we start with new RouteConditionReady every revision,
+	// uncomment the short-circuiting below.
+	//
+	// // Do not downgrade Ready condition.
+	// if c := rs.GetCondition(RouteConditionReady); c != nil && c.Status == corev1.ConditionFalse {
+	// 	return
+	// }
+	//
+	// For now, the following is harmless because RouteConditionAllTrafficAssigned
+	// is the only condition RouteConditionReady depends on.
+	rs.setCondition(&RouteCondition{
+		Type:    RouteConditionReady,
+		Status:  corev1.ConditionUnknown,
+		Reason:  reason,
+		Message: msg,
+	})
+}
+
+func (rs *RouteStatus) markTrafficTargetFailed(reason, msg string) {
 	for _, cond := range []RouteConditionType{
 		RouteConditionAllTrafficAssigned,
 		RouteConditionReady,
@@ -259,25 +305,37 @@ func (rs *RouteStatus) markTrafficNotAssigned(reason, msg string) {
 }
 
 func (rs *RouteStatus) MarkUnknownTrafficError(msg string) {
-	rs.markTrafficNotAssigned("Unknown", msg)
+	rs.markTrafficTargetNotReady("Unknown", msg)
 }
 
-func (rs *RouteStatus) MarkUnreadyConfigurationTarget(configName string) {
+func (rs *RouteStatus) MarkConfigurationNotReady(name string) {
 	reason := "RevisionMissing"
-	msg := fmt.Sprintf("Configuration %q does not have a LatestReadyRevision.", configName)
-	rs.markTrafficNotAssigned(reason, msg)
+	msg := fmt.Sprintf("Configuration %q is waiting for a Revision to become ready.", name)
+	rs.markTrafficTargetNotReady(reason, msg)
 }
 
-func (rs *RouteStatus) MarkDeletedLatestRevisionTarget(configName string) {
+func (rs *RouteStatus) MarkConfigurationFailed(name string) {
 	reason := "RevisionMissing"
-	msg := fmt.Sprintf("Latest Revision of Configuration %q is deleted.", configName)
-	rs.markTrafficNotAssigned(reason, msg)
+	msg := fmt.Sprintf("Configuration %q does not have any ready Revision.", name)
+	rs.markTrafficTargetFailed(reason, msg)
+}
+
+func (rs *RouteStatus) MarkRevisionNotReady(name string) {
+	reason := "RevisionMissing"
+	msg := fmt.Sprintf("Revision %q is not yet ready.", name)
+	rs.markTrafficTargetNotReady(reason, msg)
+}
+
+func (rs *RouteStatus) MarkRevisionFailed(name string) {
+	reason := "RevisionMissing"
+	msg := fmt.Sprintf("Revision %q failed to become ready.", name)
+	rs.markTrafficTargetFailed(reason, msg)
 }
 
 func (rs *RouteStatus) MarkMissingTrafficTarget(kind, name string) {
 	reason := kind + "Missing"
 	msg := fmt.Sprintf("%s %q referenced in traffic not found.", kind, name)
-	rs.markTrafficNotAssigned(reason, msg)
+	rs.markTrafficTargetFailed(reason, msg)
 }
 
 func (rs *RouteStatus) checkAndMarkReady() {

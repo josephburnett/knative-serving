@@ -21,12 +21,12 @@ import (
 	"time"
 
 	buildv1alpha1 "github.com/knative/build/pkg/apis/build/v1alpha1"
+	"github.com/knative/pkg/logging"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
 	"github.com/knative/serving/pkg/autoscaler"
 	"github.com/knative/serving/pkg/controller"
 	"github.com/knative/serving/pkg/controller/revision/config"
 	"github.com/knative/serving/pkg/controller/revision/resources"
-	"github.com/knative/serving/pkg/logging"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -114,15 +114,15 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "first-reconcile", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -158,15 +158,15 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "update-status-failure", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -199,15 +199,15 @@ func TestReconcile(t *testing.T) {
 				v1alpha1.RevisionStatus{
 					LogURL: "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -242,15 +242,15 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "create-user-service-failure", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -293,11 +293,11 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "ContainerHealthy",
+						Type:   "Ready",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "Ready",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},
@@ -336,11 +336,11 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "ContainerHealthy",
+						Type:   "Ready",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "Ready",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},
@@ -425,7 +425,12 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "ContainerHealthy",
+						Type:    "Ready",
+						Status:  "False",
+						Reason:  "Inactive",
+						Message: `Revision "deactivate" is Inactive.`,
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -1130,8 +1135,8 @@ func TestReconcile(t *testing.T) {
 					}, {
 						Type:    "Ready",
 						Status:  "False",
-						Reason:  "Deactivated",
-						Message: "Revision has not received traffic recently.",
+						Reason:  "Inactive",
+						Message: `Revision "stable-retirement" is Inactive.`,
 					}},
 				}),
 		},
@@ -1193,11 +1198,11 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "ContainerHealthy",
+						Type:   "Ready",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "Ready",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},
@@ -1230,11 +1235,11 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "create-in-reserve", "Reserve", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
+						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "ContainerHealthy",
+						Type:   "Ready",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -1350,7 +1355,7 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 						// We set the LTT so that we don't give up on the Endpoints yet.
-						LastTransitionTime: metav1.NewTime(time.Now()),
+						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now())},
 					}},
 				}),
 			deploy("foo", "endpoint-created-not-ready", "Active", "busybox"),
@@ -1414,12 +1419,12 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:    "ResourcesAvailable",
+						Type:    "Ready",
 						Status:  "False",
 						Reason:  "ServiceTimeout",
 						Message: "Timed out waiting for a service endpoint to become ready",
 					}, {
-						Type:    "Ready",
+						Type:    "ResourcesAvailable",
 						Status:  "False",
 						Reason:  "ServiceTimeout",
 						Message: "Timed out waiting for a service endpoint to become ready",
@@ -1482,6 +1487,9 @@ func TestReconcile(t *testing.T) {
 					}, {
 						Type:   "Ready",
 						Status: "True",
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "True",
 					}},
 				}),
 		}},
@@ -1516,7 +1524,7 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 						// We set the LTT so that we don't give up on the Endpoints yet.
-						LastTransitionTime: metav1.NewTime(time.Now()),
+						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now())},
 					}},
 				}),
 			deploy("foo", "fix-mutated-service", "Active", "busybox"),
@@ -1541,11 +1549,11 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Updating",
 					}, {
-						Type:   "ContainerHealthy",
+						Type:   "Ready",
 						Status: "Unknown",
 						Reason: "Updating",
 					}, {
-						Type:   "Ready",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Updating",
 					}},
@@ -1585,7 +1593,7 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 						// We set the LTT so that we don't give up on the Endpoints yet.
-						LastTransitionTime: metav1.NewTime(time.Now()),
+						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now())},
 					}},
 				}),
 			deploy("foo", "update-user-svc-failure", "Active", "busybox"),
@@ -1628,7 +1636,7 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 						// We set the LTT so that we don't give up on the Endpoints yet.
-						LastTransitionTime: metav1.NewTime(time.Now()),
+						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now())},
 					}},
 				}),
 			deploy("foo", "update-as-svc-failure", "Active", "busybox"),
@@ -1671,7 +1679,7 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 						// We set the LTT so that we don't give up on the Endpoints yet.
-						LastTransitionTime: metav1.NewTime(time.Now()),
+						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now())},
 					}},
 				}),
 			timeoutDeploy(deploy("foo", "deploy-timeout", "Active", "busybox")),
@@ -1700,7 +1708,7 @@ func TestReconcile(t *testing.T) {
 						Reason:  "ProgressDeadlineExceeded",
 						Message: "Unable to create pods for more than 120 seconds.",
 					}, {
-						Type:    "Ready",
+						Type:    "ResourcesAvailable",
 						Status:  "False",
 						Reason:  "ProgressDeadlineExceeded",
 						Message: "Unable to create pods for more than 120 seconds.",
@@ -1725,7 +1733,7 @@ func TestReconcile(t *testing.T) {
 				v1alpha1.RevisionStatus{
 					LogURL: "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
+						Type:   "BuildSucceeded",
 						Status: "Unknown",
 					}, {
 						Type:   "ContainerHealthy",
@@ -1737,7 +1745,7 @@ func TestReconcile(t *testing.T) {
 						Type:   "Ready",
 						Status: "Unknown",
 					}, {
-						Type:   "BuildSucceeded",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 					}},
 				}),
@@ -1764,8 +1772,9 @@ func TestReconcile(t *testing.T) {
 				v1alpha1.RevisionStatus{
 					LogURL: "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
+						Type:   "BuildSucceeded",
 						Status: "Unknown",
+						Reason: "Building",
 					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
@@ -1777,9 +1786,8 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Building",
 					}, {
-						Type:   "Ready",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
-						Reason: "Building",
 					}},
 				}),
 		}},
@@ -1809,7 +1817,7 @@ func TestReconcile(t *testing.T) {
 						Type:   "Ready",
 						Status: "Unknown",
 					}, {
-						Type:   "BuildSucceeded",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 					}},
 				}),
@@ -1838,15 +1846,15 @@ func TestReconcile(t *testing.T) {
 						Type:   "BuildSucceeded",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},
@@ -1872,15 +1880,15 @@ func TestReconcile(t *testing.T) {
 						Type:   "BuildSucceeded",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},
@@ -1920,7 +1928,7 @@ func TestReconcile(t *testing.T) {
 						Type:   "Ready",
 						Status: "Unknown",
 					}, {
-						Type:   "BuildSucceeded",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 					}},
 				}),
@@ -1951,10 +1959,16 @@ func TestReconcile(t *testing.T) {
 						Reason:  "SomeReason",
 						Message: "This is why the build failed.",
 					}, {
+						Type:   "ContainerHealthy",
+						Status: "Unknown",
+					}, {
 						Type:    "Ready",
 						Status:  "False",
 						Reason:  "SomeReason",
 						Message: "This is why the build failed.",
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "Unknown",
 					}},
 				}),
 		}},
@@ -2001,9 +2015,9 @@ func TestReconcile(t *testing.T) {
 		Key: "foo/failed-build-stable",
 	}}
 
-	table.Test(t, func(listers *Listers, opt controller.Options) controller.Interface {
-		return &Controller{
-			Base:                controller.NewBase(opt, controllerAgentName, "Revisions"),
+	table.Test(t, func(listers *Listers, opt controller.ReconcileOptions) controller.Reconciler {
+		return &Reconciler{
+			Base:                controller.NewBase(opt, controllerAgentName),
 			revisionLister:      listers.GetRevisionLister(),
 			buildLister:         listers.GetBuildLister(),
 			deploymentLister:    listers.GetDeploymentLister(),
@@ -2083,15 +2097,15 @@ func TestReconcileWithVarLogEnabled(t *testing.T) {
 					ServiceName: svc("foo", "first-reconcile-var-log", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -2126,15 +2140,15 @@ func TestReconcileWithVarLogEnabled(t *testing.T) {
 					ServiceName: svc("foo", "create-configmap-failure", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -2275,9 +2289,9 @@ func TestReconcileWithVarLogEnabled(t *testing.T) {
 		Key: "foo/update-configmap-failure",
 	}}
 
-	table.Test(t, func(listers *Listers, opt controller.Options) controller.Interface {
-		return &Controller{
-			Base:                controller.NewBase(opt, controllerAgentName, "Revisions"),
+	table.Test(t, func(listers *Listers, opt controller.ReconcileOptions) controller.Reconciler {
+		return &Reconciler{
+			Base:                controller.NewBase(opt, controllerAgentName),
 			revisionLister:      listers.GetRevisionLister(),
 			buildLister:         listers.GetBuildLister(),
 			deploymentLister:    listers.GetDeploymentLister(),

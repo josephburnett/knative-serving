@@ -18,19 +18,22 @@ package route
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
+	servingv1alpha1 "github.com/knative/serving/pkg/client/clientset/versioned/typed/serving/v1alpha1"
 	"github.com/knative/serving/pkg/controller/route/traffic"
 	"github.com/knative/serving/pkg/logging"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 )
 
-func (c *Controller) syncLabels(ctx context.Context, r *v1alpha1.Route, tc *traffic.TrafficConfig) error {
+func (c *Reconciler) syncLabels(ctx context.Context, r *v1alpha1.Route, tc *traffic.TrafficConfig) error {
 	if err := c.deleteLabelForOutsideOfGivenConfigurations(ctx, r, tc.Configurations); err != nil {
 		return err
 	}
@@ -40,8 +43,12 @@ func (c *Controller) syncLabels(ctx context.Context, r *v1alpha1.Route, tc *traf
 	return nil
 }
 
-func (c *Controller) setLabelForGivenConfigurations(
-	ctx context.Context, route *v1alpha1.Route, configMap map[string]*v1alpha1.Configuration) error {
+func (c *Reconciler) setLabelForGivenConfigurations(
+	ctx context.Context,
+	route *v1alpha1.Route,
+	configMap map[string]*v1alpha1.Configuration,
+) error {
+
 	logger := logging.FromContext(ctx)
 	configClient := c.ServingClientSet.ServingV1alpha1().Configurations(route.Namespace)
 
@@ -74,9 +81,9 @@ func (c *Controller) setLabelForGivenConfigurations(
 		} else if _, ok := config.Labels[serving.RouteLabelKey]; ok {
 			continue
 		}
-		config.Labels[serving.RouteLabelKey] = route.Name
-		if _, err := configClient.Update(config); err != nil {
-			logger.Errorf("Failed to update Configuration %s: %s", config.Name, err)
+
+		if err := setRouteLabelForConfiguration(configClient, config.Name, &route.Name); err != nil {
+			logger.Errorf("Failed to add route label to configuration %q: %s", config.Name, err)
 			return err
 		}
 	}
@@ -84,10 +91,15 @@ func (c *Controller) setLabelForGivenConfigurations(
 	return nil
 }
 
-func (c *Controller) deleteLabelForOutsideOfGivenConfigurations(
-	ctx context.Context, route *v1alpha1.Route, configMap map[string]*v1alpha1.Configuration) error {
+func (c *Reconciler) deleteLabelForOutsideOfGivenConfigurations(
+	ctx context.Context,
+	route *v1alpha1.Route,
+	configMap map[string]*v1alpha1.Configuration,
+) error {
+
 	logger := logging.FromContext(ctx)
 	ns := route.Namespace
+
 	// Get Configurations set as traffic target before this sync.
 	selector, err := labels.Parse(fmt.Sprintf("%s=%s", serving.RouteLabelKey, route.Name))
 	if err != nil {
@@ -103,13 +115,39 @@ func (c *Controller) deleteLabelForOutsideOfGivenConfigurations(
 	// Delete label for newly removed configurations as traffic target.
 	for _, config := range oldConfigsList {
 		if _, ok := configMap[config.Name]; !ok {
+
 			delete(config.Labels, serving.RouteLabelKey)
-			if _, err := c.ServingClientSet.ServingV1alpha1().Configurations(ns).Update(config); err != nil {
-				logger.Errorf("Failed to update Configuration %s: %s", config.Name, err)
+
+			configClient := c.ServingClientSet.ServingV1alpha1().Configurations(config.Namespace)
+			if err := setRouteLabelForConfiguration(configClient, config.Name, nil); err != nil {
+				logger.Errorf("Failed to remove route label to configuration %q: %s", config.Name, err)
 				return err
 			}
 		}
 	}
 
 	return nil
+}
+
+func setRouteLabelForConfiguration(
+	configClient servingv1alpha1.ConfigurationInterface,
+	configName string,
+	routeName *string, // a nil route name will cause the route label to be deleted
+) error {
+
+	mergePatch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": map[string]interface{}{
+				serving.RouteLabelKey: routeName,
+			},
+		},
+	}
+
+	patch, err := json.Marshal(mergePatch)
+	if err != nil {
+		return err
+	}
+
+	_, err = configClient.Patch(configName, types.MergePatchType, patch)
+	return err
 }

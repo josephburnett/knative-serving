@@ -2,20 +2,21 @@ package e2e
 
 import (
 	"testing"
-	"time"
 
-	"github.com/knative/serving/test"
 	"go.uber.org/zap"
+
 	// Mysteriously required to support GCP auth (required by k8s libs).
 	// Apparently just importing it is enough. @_@ side effects @_@.
 	// https://github.com/kubernetes/client-go/issues/242
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+
+	"github.com/knative/serving/test"
 )
 
 const (
 	configName           = "prod"
 	routeName            = "noodleburg"
-	defaultNamespaceName = "noodleburg"
+	defaultNamespaceName = "serving-tests"
 )
 
 // Setup creates the client objects needed in the e2e tests.
@@ -39,15 +40,6 @@ func TearDown(clients *test.Clients, names test.ResourceNames, logger *zap.Sugar
 	if clients != nil {
 		clients.Delete([]string{names.Route}, []string{names.Config})
 	}
-
-	// There seems to be an Istio bug where if we delete / create
-	// VirtualServices too quickly we will hit pro-longed "No health
-	// upstream" causing timeouts.  Adding this small sleep to
-	// sidestep the issue.
-	//
-	// TODO(#1376):  Fix this when upstream fix is released.
-	logger.Info("Sleeping for 20 seconds after Route deletion to avoid hitting issue in #1376")
-	time.Sleep(20 * time.Second)
 }
 
 // CreateRouteAndConfig will create Route and Config objects using clients.

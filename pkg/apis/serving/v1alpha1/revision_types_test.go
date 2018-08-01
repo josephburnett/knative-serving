@@ -1,9 +1,12 @@
 /*
-Copyright 2018 The Knative Authors.
+Copyright 2018 The Knative Authors
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
+
     http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -317,11 +320,6 @@ func TestGetSetCondition(t *testing.T) {
 	if a := rs.GetCondition(RevisionConditionReady); a != nil {
 		t.Errorf("GetCondition expected nil got: %v", a)
 	}
-	// Remove and make sure it's no longer there
-	rs.RemoveCondition(RevisionConditionBuildSucceeded)
-	if a := rs.GetCondition(RevisionConditionBuildSucceeded); a != nil {
-		t.Errorf("empty RevisionStatus returned %v when expected nil", a)
-	}
 }
 
 func TestRevisionConditions(t *testing.T) {
@@ -349,13 +347,6 @@ func TestRevisionConditions(t *testing.T) {
 		t.Fatalf("Unexpected Condition length; got %d, want %d", got, want)
 	}
 
-	// Remove a non-existent condition.
-	rev.Status.RemoveCondition(bar.Type)
-
-	if got, want := len(rev.Status.Conditions), 1; got != want {
-		t.Fatalf("Unexpected Condition length; got %d, want %d", got, want)
-	}
-
 	// Add a second condition.
 	rev.Status.setCondition(bar)
 
@@ -363,17 +354,10 @@ func TestRevisionConditions(t *testing.T) {
 		t.Fatalf("Unexpected Condition length; got %d, want %d", got, want)
 	}
 
-	// Remove an existing condition.
-	rev.Status.RemoveCondition(bar.Type)
-
-	if got, want := len(rev.Status.Conditions), 1; got != want {
-		t.Fatalf("Unexpected Condition length; got %d, want %d", got, want)
-	}
-
 	// Add nil condition.
 	rev.Status.setCondition(nil)
 
-	if got, want := len(rev.Status.Conditions), 1; got != want {
+	if got, want := len(rev.Status.Conditions), 2; got != want {
 		t.Fatalf("Unexpected Condition length; got %d, want %d", got, want)
 	}
 }

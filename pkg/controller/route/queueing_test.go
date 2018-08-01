@@ -20,13 +20,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/knative/pkg/configmap"
+	. "github.com/knative/pkg/logging/testing"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
 	fakeclientset "github.com/knative/serving/pkg/client/clientset/versioned/fake"
 	informers "github.com/knative/serving/pkg/client/informers/externalversions"
-	"github.com/knative/serving/pkg/configmap"
 	ctrl "github.com/knative/serving/pkg/controller"
 	"github.com/knative/serving/pkg/controller/route/config"
-	. "github.com/knative/serving/pkg/logging/testing"
 	"github.com/knative/serving/pkg/system"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,7 +81,7 @@ func TestNewRouteCallsSyncHandler(t *testing.T) {
 	servingInformer := informers.NewSharedInformerFactory(servingClient, 0)
 
 	controller := NewController(
-		ctrl.Options{
+		ctrl.ReconcileOptions{
 			KubeClientSet:    kubeClient,
 			ServingClientSet: servingClient,
 			ConfigMapWatcher: configMapWatcher,

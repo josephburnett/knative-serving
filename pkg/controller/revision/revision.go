@@ -29,6 +29,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	commonlogging "github.com/knative/pkg/logging"
+	commonlogkey "github.com/knative/pkg/logging/logkey"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/autoscaler"
 	"github.com/knative/serving/pkg/controller/revision/config"
@@ -53,7 +55,6 @@ import (
 
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/runtime"
 	appsv1listers "k8s.io/client-go/listers/apps/v1"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -89,8 +90,8 @@ type resolver interface {
 	Resolve(*appsv1.Deployment) error
 }
 
-// Controller implements the controller for Revision resources.
-type Controller struct {
+// Reconciler implements controller.Reconciler for Revision resources.
+type Reconciler struct {
 	*controller.Base
 
 	// VpaClientSet allows us to configure VPA objects
@@ -121,7 +122,7 @@ type Controller struct {
 
 	// loggingConfig could change over time and access to it
 	// must go through loggingConfigMutex
-	loggingConfig      *logging.Config
+	loggingConfig      *commonlogging.Config
 	loggingConfigMutex sync.Mutex
 
 	// observabilityConfig could change over time and access to it
@@ -135,13 +136,16 @@ type Controller struct {
 	autoscalerConfigMutex sync.Mutex
 }
 
+// Check that our Reconciler implements controller.Reconciler
+var _ controller.Reconciler = (*Reconciler)(nil)
+
 // NewController initializes the controller and is called by the generated code
 // Registers eventhandlers to enqueue events
 // config - client configuration for talking to the apiserver
 // si - informer factory shared across all controllers for listening to events and indexing resource properties
 // queue - message queue for handling new events.  unique to this controller.
 func NewController(
-	opt controller.Options,
+	opt controller.ReconcileOptions,
 	vpaClient vpa.Interface,
 	revisionInformer servinginformers.RevisionInformer,
 	buildInformer buildinformers.BuildInformer,
@@ -150,10 +154,10 @@ func NewController(
 	endpointsInformer corev1informers.EndpointsInformer,
 	configMapInformer corev1informers.ConfigMapInformer,
 	vpaInformer vpav1alpha1informers.VerticalPodAutoscalerInformer,
-) *Controller {
+) *controller.Impl {
 
-	c := &Controller{
-		Base:             controller.NewBase(opt, controllerAgentName, "Revisions"),
+	c := &Reconciler{
+		Base:             controller.NewBase(opt, controllerAgentName),
 		vpaClient:        vpaClient,
 		revisionLister:   revisionInformer.Lister(),
 		buildLister:      buildInformer.Lister(),
@@ -163,38 +167,39 @@ func NewController(
 		configMapLister:  configMapInformer.Lister(),
 		buildtracker:     &buildTracker{builds: map[key]set{}},
 	}
+	impl := controller.NewImpl(c, c.Logger, "Revisions")
 
 	// Set up an event handler for when the resource types of interest change
 	c.Logger.Info("Setting up event handlers")
 	revisionInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    c.Enqueue,
-		UpdateFunc: controller.PassNew(c.Enqueue),
-		DeleteFunc: c.Enqueue,
+		AddFunc:    impl.Enqueue,
+		UpdateFunc: controller.PassNew(impl.Enqueue),
+		DeleteFunc: impl.Enqueue,
 	})
 
 	buildInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    c.EnqueueBuildTrackers,
-		UpdateFunc: controller.PassNew(c.EnqueueBuildTrackers),
+		AddFunc:    c.EnqueueBuildTrackers(impl),
+		UpdateFunc: controller.PassNew(c.EnqueueBuildTrackers(impl)),
 	})
 
 	endpointsInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    c.EnqueueEndpointsRevision,
-		UpdateFunc: controller.PassNew(c.EnqueueEndpointsRevision),
+		AddFunc:    c.EnqueueEndpointsRevision(impl),
+		UpdateFunc: controller.PassNew(c.EnqueueEndpointsRevision(impl)),
 	})
 
 	deploymentInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: controller.Filter("Revision"),
+		FilterFunc: controller.Filter(v1alpha1.SchemeGroupVersion.WithKind("Revision")),
 		Handler: cache.ResourceEventHandlerFuncs{
-			AddFunc:    c.EnqueueControllerOf,
-			UpdateFunc: controller.PassNew(c.EnqueueControllerOf),
+			AddFunc:    impl.EnqueueControllerOf,
+			UpdateFunc: controller.PassNew(impl.EnqueueControllerOf),
 		},
 	})
 
 	configMapInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: controller.Filter("Revision"),
+		FilterFunc: controller.Filter(v1alpha1.SchemeGroupVersion.WithKind("Revision")),
 		Handler: cache.ResourceEventHandlerFuncs{
-			AddFunc:    c.EnqueueControllerOf,
-			UpdateFunc: controller.PassNew(c.EnqueueControllerOf),
+			AddFunc:    impl.EnqueueControllerOf,
+			UpdateFunc: controller.PassNew(impl.EnqueueControllerOf),
 		},
 	})
 
@@ -204,29 +209,22 @@ func NewController(
 	opt.ConfigMapWatcher.Watch(autoscaler.ConfigName, c.receiveAutoscalerConfig)
 	opt.ConfigMapWatcher.Watch(config.ControllerConfigName, c.receiveControllerConfig)
 
-	return c
-}
-
-// Run starts the controller's worker threads, the number of which is threadiness. It then blocks until stopCh
-// is closed, at which point it shuts down its internal work queue and waits for workers to finish processing their
-// current work items.
-func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
-	return c.RunController(threadiness, stopCh, c.Reconcile, "Revision")
+	return impl
 }
 
 // loggerWithRevisionInfo enriches the logs with revision name and namespace.
 func loggerWithRevisionInfo(logger *zap.SugaredLogger, ns string, name string) *zap.SugaredLogger {
-	return logger.With(zap.String(logkey.Namespace, ns), zap.String(logkey.Revision, name))
+	return logger.With(zap.String(commonlogkey.Namespace, ns), zap.String(logkey.Revision, name))
 }
 
 // Reconcile compares the actual state with the desired, and attempts to
 // converge the two. It then updates the Status block of the Revision resource
 // with the current status of the resource.
-func (c *Controller) Reconcile(key string) error {
+func (c *Reconciler) Reconcile(key string) error {
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
-		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
+		c.Logger.Errorf("invalid resource key: %s", key)
 		return nil
 	}
 
@@ -238,7 +236,7 @@ func (c *Controller) Reconcile(key string) error {
 	original, err := c.revisionLister.Revisions(namespace).Get(name)
 	// The resource may no longer exist, in which case we stop processing.
 	if apierrs.IsNotFound(err) {
-		runtime.HandleError(fmt.Errorf("revision %q in work queue no longer exists", key))
+		logger.Errorf("revision %q in work queue no longer exists", key)
 		return nil
 	} else if err != nil {
 		return err
@@ -264,7 +262,7 @@ func (c *Controller) Reconcile(key string) error {
 	return err
 }
 
-func (c *Controller) reconcile(ctx context.Context, rev *v1alpha1.Revision) error {
+func (c *Reconciler) reconcile(ctx context.Context, rev *v1alpha1.Revision) error {
 	logger := logging.FromContext(ctx)
 
 	rev.Status.InitializeConditions()
@@ -337,40 +335,43 @@ func (c *Controller) reconcile(ctx context.Context, rev *v1alpha1.Revision) erro
 	return nil
 }
 
-func (c *Controller) updateRevisionLoggingURL(rev *v1alpha1.Revision) {
+func (c *Reconciler) updateRevisionLoggingURL(rev *v1alpha1.Revision) {
 	logURLTmpl := c.getObservabilityConfig().LoggingURLTemplate
 	if logURLTmpl != "" {
 		rev.Status.LogURL = strings.Replace(logURLTmpl, "${REVISION_UID}", string(rev.UID), -1)
 	}
 }
 
-func (c *Controller) EnqueueBuildTrackers(obj interface{}) {
-	build := obj.(*buildv1alpha1.Build)
+func (c *Reconciler) EnqueueBuildTrackers(impl *controller.Impl) func(obj interface{}) {
+	return func(obj interface{}) {
+		build := obj.(*buildv1alpha1.Build)
 
-	// TODO(#1267): We should consider alternatives to the buildtracker that
-	// allow us to shed this indexed state.
-	if bc := getBuildDoneCondition(build); bc != nil {
-		// For each of the revisions watching this build, mark their build phase as complete.
-		for k := range c.buildtracker.GetTrackers(build) {
-			c.EnqueueKey(string(k))
+		// TODO(#1267): We should consider alternatives to the buildtracker that
+		// allow us to shed this indexed state.
+		if bc := getBuildDoneCondition(build); bc != nil {
+			// For each of the revisions watching this build, mark their build phase as complete.
+			for k := range c.buildtracker.GetTrackers(build) {
+				impl.EnqueueKey(string(k))
+			}
 		}
 	}
 }
 
-func (c *Controller) EnqueueEndpointsRevision(obj interface{}) {
-	endpoints := obj.(*corev1.Endpoints)
-	// Use the label on the Endpoints (from Service) to determine whether it is
-	// owned by a Revision, and if so queue that Revision.
-	if revisionName, ok := endpoints.Labels[serving.RevisionLabelKey]; ok {
-		c.EnqueueKey(endpoints.Namespace + "/" + revisionName)
+func (c *Reconciler) EnqueueEndpointsRevision(impl *controller.Impl) func(obj interface{}) {
+	return func(obj interface{}) {
+		endpoints := obj.(*corev1.Endpoints)
+		// Use the label on the Endpoints (from Service) to determine whether it is
+		// owned by a Revision, and if so queue that Revision.
+		if revisionName, ok := endpoints.Labels[serving.RevisionLabelKey]; ok {
+			impl.EnqueueKey(endpoints.Namespace + "/" + revisionName)
+		}
 	}
-
 }
 
-func (c *Controller) reconcileDeployment(ctx context.Context, rev *v1alpha1.Revision) error {
+func (c *Reconciler) reconcileDeployment(ctx context.Context, rev *v1alpha1.Revision) error {
 	ns := rev.Namespace
 	deploymentName := resourcenames.Deployment(rev)
-	logger := logging.FromContext(ctx).With(zap.String(logkey.Deployment, deploymentName))
+	logger := logging.FromContext(ctx).With(zap.String(commonlogkey.Deployment, deploymentName))
 
 	deployment, getDepErr := c.deploymentLister.Deployments(ns).Get(deploymentName)
 
@@ -433,7 +434,7 @@ func (c *Controller) reconcileDeployment(ctx context.Context, rev *v1alpha1.Revi
 	}
 }
 
-func (c *Controller) createDeployment(ctx context.Context, rev *v1alpha1.Revision) (*appsv1.Deployment, error) {
+func (c *Reconciler) createDeployment(ctx context.Context, rev *v1alpha1.Revision) (*appsv1.Deployment, error) {
 	logger := logging.FromContext(ctx)
 
 	// Determine the appropriate replica count and state for the Active condition.
@@ -468,8 +469,8 @@ func (c *Controller) createDeployment(ctx context.Context, rev *v1alpha1.Revisio
 	return c.KubeClientSet.AppsV1().Deployments(deployment.Namespace).Create(deployment)
 }
 
-// This is a generic function used both for deployment of user code & autoscaler
-func (c *Controller) checkAndUpdateDeployment(ctx context.Context, rev *v1alpha1.Revision, deployment *appsv1.Deployment) (*appsv1.Deployment, error) {
+// This is a generic function used both for deployment of user code & autoscalerz
+func (c *Reconciler) checkAndUpdateDeployment(ctx context.Context, rev *v1alpha1.Revision, deployment *appsv1.Deployment) (*appsv1.Deployment, error) {
 	logger := logging.FromContext(ctx)
 
 	// TODO(mattmoor): Generalize this to reconcile discrepancies vs. what
@@ -515,7 +516,7 @@ func (c *Controller) checkAndUpdateDeployment(ctx context.Context, rev *v1alpha1
 }
 
 // This is a generic function used both for deployment of user code & autoscaler
-func (c *Controller) deleteDeployment(ctx context.Context, deployment *appsv1.Deployment) error {
+func (c *Reconciler) deleteDeployment(ctx context.Context, deployment *appsv1.Deployment) error {
 	logger := logging.FromContext(ctx)
 
 	err := c.KubeClientSet.AppsV1().Deployments(deployment.Namespace).Delete(deployment.Name, fgDeleteOptions)
@@ -528,10 +529,10 @@ func (c *Controller) deleteDeployment(ctx context.Context, deployment *appsv1.De
 	return nil
 }
 
-func (c *Controller) reconcileService(ctx context.Context, rev *v1alpha1.Revision) error {
+func (c *Reconciler) reconcileService(ctx context.Context, rev *v1alpha1.Revision) error {
 	ns := rev.Namespace
 	serviceName := resourcenames.K8sService(rev)
-	logger := logging.FromContext(ctx).With(zap.String(logkey.KubernetesService, serviceName))
+	logger := logging.FromContext(ctx).With(zap.String(commonlogkey.KubernetesService, serviceName))
 
 	rev.Status.ServiceName = serviceName
 
@@ -628,14 +629,14 @@ func (c *Controller) reconcileService(ctx context.Context, rev *v1alpha1.Revisio
 
 type serviceFactory func(*v1alpha1.Revision) *corev1.Service
 
-func (c *Controller) createService(ctx context.Context, rev *v1alpha1.Revision, sf serviceFactory) (*corev1.Service, error) {
+func (c *Reconciler) createService(ctx context.Context, rev *v1alpha1.Revision, sf serviceFactory) (*corev1.Service, error) {
 	// Create the service.
 	service := sf(rev)
 
 	return c.KubeClientSet.CoreV1().Services(service.Namespace).Create(service)
 }
 
-func (c *Controller) checkAndUpdateService(ctx context.Context, rev *v1alpha1.Revision, sf serviceFactory, service *corev1.Service) (*corev1.Service, Changed, error) {
+func (c *Reconciler) checkAndUpdateService(ctx context.Context, rev *v1alpha1.Revision, sf serviceFactory, service *corev1.Service) (*corev1.Service, Changed, error) {
 	logger := logging.FromContext(ctx)
 
 	desiredService := sf(rev)
@@ -654,7 +655,7 @@ func (c *Controller) checkAndUpdateService(ctx context.Context, rev *v1alpha1.Re
 	return d, WasChanged, err
 }
 
-func (c *Controller) deleteService(ctx context.Context, svc *corev1.Service) error {
+func (c *Reconciler) deleteService(ctx context.Context, svc *corev1.Service) error {
 	logger := logging.FromContext(ctx)
 
 	err := c.KubeClientSet.CoreV1().Services(svc.Namespace).Delete(svc.Name, fgDeleteOptions)
@@ -667,7 +668,7 @@ func (c *Controller) deleteService(ctx context.Context, svc *corev1.Service) err
 	return nil
 }
 
-func (c *Controller) reconcileFluentdConfigMap(ctx context.Context, rev *v1alpha1.Revision) error {
+func (c *Reconciler) reconcileFluentdConfigMap(ctx context.Context, rev *v1alpha1.Revision) error {
 	logger := logging.FromContext(ctx)
 	if !c.getObservabilityConfig().EnableVarLogCollection {
 		return nil
@@ -704,7 +705,7 @@ func (c *Controller) reconcileFluentdConfigMap(ctx context.Context, rev *v1alpha
 	return nil
 }
 
-func (c *Controller) reconcileAutoscalerService(ctx context.Context, rev *v1alpha1.Revision) error {
+func (c *Reconciler) reconcileAutoscalerService(ctx context.Context, rev *v1alpha1.Revision) error {
 	// If an autoscaler image is undefined, then skip the autoscaler reconciliation.
 	if c.getControllerConfig().AutoscalerImage == "" {
 		return nil
@@ -712,7 +713,7 @@ func (c *Controller) reconcileAutoscalerService(ctx context.Context, rev *v1alph
 
 	ns := system.Namespace
 	serviceName := resourcenames.Autoscaler(rev)
-	logger := logging.FromContext(ctx).With(zap.String(logkey.KubernetesService, serviceName))
+	logger := logging.FromContext(ctx).With(zap.String(commonlogkey.KubernetesService, serviceName))
 
 	service, err := c.serviceLister.Services(ns).Get(serviceName)
 	switch rev.Spec.ServingState {
@@ -771,7 +772,7 @@ func (c *Controller) reconcileAutoscalerService(ctx context.Context, rev *v1alph
 	}
 }
 
-func (c *Controller) reconcileAutoscalerDeployment(ctx context.Context, rev *v1alpha1.Revision) error {
+func (c *Reconciler) reconcileAutoscalerDeployment(ctx context.Context, rev *v1alpha1.Revision) error {
 	// If an autoscaler image is undefined, then skip the autoscaler reconciliation.
 	if c.getControllerConfig().AutoscalerImage == "" {
 		return nil
@@ -779,7 +780,7 @@ func (c *Controller) reconcileAutoscalerDeployment(ctx context.Context, rev *v1a
 
 	ns := system.Namespace
 	deploymentName := resourcenames.Autoscaler(rev)
-	logger := logging.FromContext(ctx).With(zap.String(logkey.Deployment, deploymentName))
+	logger := logging.FromContext(ctx).With(zap.String(commonlogkey.Deployment, deploymentName))
 
 	deployment, getDepErr := c.deploymentLister.Deployments(ns).Get(deploymentName)
 	switch rev.Spec.ServingState {
@@ -832,7 +833,7 @@ func (c *Controller) reconcileAutoscalerDeployment(ctx context.Context, rev *v1a
 	}
 }
 
-func (c *Controller) createAutoscalerDeployment(ctx context.Context, rev *v1alpha1.Revision) (*appsv1.Deployment, error) {
+func (c *Reconciler) createAutoscalerDeployment(ctx context.Context, rev *v1alpha1.Revision) (*appsv1.Deployment, error) {
 	var replicaCount int32 = 1
 	if rev.Spec.ServingState == v1alpha1.RevisionServingStateReserve {
 		replicaCount = 0
@@ -841,7 +842,7 @@ func (c *Controller) createAutoscalerDeployment(ctx context.Context, rev *v1alph
 	return c.KubeClientSet.AppsV1().Deployments(deployment.Namespace).Create(deployment)
 }
 
-func (c *Controller) reconcileVPA(ctx context.Context, rev *v1alpha1.Revision) error {
+func (c *Reconciler) reconcileVPA(ctx context.Context, rev *v1alpha1.Revision) error {
 	logger := logging.FromContext(ctx)
 	if !c.getAutoscalerConfig().EnableVPA {
 		return nil
@@ -895,13 +896,13 @@ func (c *Controller) reconcileVPA(ctx context.Context, rev *v1alpha1.Revision) e
 	}
 }
 
-func (c *Controller) createVPA(ctx context.Context, rev *v1alpha1.Revision) (*vpav1alpha1.VerticalPodAutoscaler, error) {
+func (c *Reconciler) createVPA(ctx context.Context, rev *v1alpha1.Revision) (*vpav1alpha1.VerticalPodAutoscaler, error) {
 	vpa := resources.MakeVPA(rev)
 
 	return c.vpaClient.PocV1alpha1().VerticalPodAutoscalers(vpa.Namespace).Create(vpa)
 }
 
-func (c *Controller) deleteVPA(ctx context.Context, vpa *vpav1alpha1.VerticalPodAutoscaler) error {
+func (c *Reconciler) deleteVPA(ctx context.Context, vpa *vpav1alpha1.VerticalPodAutoscaler) error {
 	logger := logging.FromContext(ctx)
 	if !c.getAutoscalerConfig().EnableVPA {
 		return nil
@@ -917,7 +918,7 @@ func (c *Controller) deleteVPA(ctx context.Context, vpa *vpav1alpha1.VerticalPod
 	return nil
 }
 
-func (c *Controller) updateStatus(rev *v1alpha1.Revision) (*v1alpha1.Revision, error) {
+func (c *Reconciler) updateStatus(rev *v1alpha1.Revision) (*v1alpha1.Revision, error) {
 	newRev, err := c.revisionLister.Revisions(rev.Namespace).Get(rev.Name)
 	if err != nil {
 		return nil, err
@@ -933,7 +934,7 @@ func (c *Controller) updateStatus(rev *v1alpha1.Revision) (*v1alpha1.Revision, e
 	return rev, nil
 }
 
-func (c *Controller) receiveNetworkConfig(configMap *corev1.ConfigMap) {
+func (c *Reconciler) receiveNetworkConfig(configMap *corev1.ConfigMap) {
 	newNetworkConfig, err := config.NewNetworkFromConfigMap(configMap)
 	c.networkConfigMutex.Lock()
 	defer c.networkConfigMutex.Unlock()
@@ -949,13 +950,13 @@ func (c *Controller) receiveNetworkConfig(configMap *corev1.ConfigMap) {
 	c.networkConfig = newNetworkConfig
 }
 
-func (c *Controller) getNetworkConfig() *config.Network {
+func (c *Reconciler) getNetworkConfig() *config.Network {
 	c.networkConfigMutex.Lock()
 	defer c.networkConfigMutex.Unlock()
-	return c.networkConfig
+	return c.networkConfig.DeepCopy()
 }
 
-func (c *Controller) receiveLoggingConfig(configMap *corev1.ConfigMap) {
+func (c *Reconciler) receiveLoggingConfig(configMap *corev1.ConfigMap) {
 	newLoggingConfig, err := logging.NewConfigFromConfigMap(configMap)
 	c.loggingConfigMutex.Lock()
 	defer c.loggingConfigMutex.Unlock()
@@ -975,7 +976,7 @@ func (c *Controller) receiveLoggingConfig(configMap *corev1.ConfigMap) {
 	c.loggingConfig = newLoggingConfig
 }
 
-func (c *Controller) receiveControllerConfig(configMap *corev1.ConfigMap) {
+func (c *Reconciler) receiveControllerConfig(configMap *corev1.ConfigMap) {
 	controllerConfig, err := config.NewControllerConfigFromConfigMap(configMap)
 
 	c.controllerConfigMutex.Lock()
@@ -1004,25 +1005,25 @@ func (c *Controller) receiveControllerConfig(configMap *corev1.ConfigMap) {
 
 }
 
-func (c *Controller) getResolver() resolver {
+func (c *Reconciler) getResolver() resolver {
 	c.resolverMutex.Lock()
 	defer c.resolverMutex.Unlock()
 	return c.resolver
 }
 
-func (c *Controller) getControllerConfig() *config.Controller {
+func (c *Reconciler) getControllerConfig() *config.Controller {
 	c.controllerConfigMutex.Lock()
 	defer c.controllerConfigMutex.Unlock()
-	return c.controllerConfig
+	return c.controllerConfig.DeepCopy()
 }
 
-func (c *Controller) getLoggingConfig() *logging.Config {
+func (c *Reconciler) getLoggingConfig() *commonlogging.Config {
 	c.loggingConfigMutex.Lock()
 	defer c.loggingConfigMutex.Unlock()
-	return c.loggingConfig
+	return c.loggingConfig.DeepCopy()
 }
 
-func (c *Controller) receiveObservabilityConfig(configMap *corev1.ConfigMap) {
+func (c *Reconciler) receiveObservabilityConfig(configMap *corev1.ConfigMap) {
 	newObservabilityConfig, err := config.NewObservabilityFromConfigMap(configMap)
 	c.observabilityConfigMutex.Lock()
 	defer c.observabilityConfigMutex.Unlock()
@@ -1038,13 +1039,13 @@ func (c *Controller) receiveObservabilityConfig(configMap *corev1.ConfigMap) {
 	c.observabilityConfig = newObservabilityConfig
 }
 
-func (c *Controller) getObservabilityConfig() *config.Observability {
+func (c *Reconciler) getObservabilityConfig() *config.Observability {
 	c.observabilityConfigMutex.Lock()
 	defer c.observabilityConfigMutex.Unlock()
-	return c.observabilityConfig
+	return c.observabilityConfig.DeepCopy()
 }
 
-func (c *Controller) receiveAutoscalerConfig(configMap *corev1.ConfigMap) {
+func (c *Reconciler) receiveAutoscalerConfig(configMap *corev1.ConfigMap) {
 	newAutoscalerConfig, err := autoscaler.NewConfigFromConfigMap(configMap)
 	c.autoscalerConfigMutex.Lock()
 	defer c.autoscalerConfigMutex.Unlock()
@@ -1060,8 +1061,8 @@ func (c *Controller) receiveAutoscalerConfig(configMap *corev1.ConfigMap) {
 	c.autoscalerConfig = newAutoscalerConfig
 }
 
-func (c *Controller) getAutoscalerConfig() *autoscaler.Config {
+func (c *Reconciler) getAutoscalerConfig() *autoscaler.Config {
 	c.autoscalerConfigMutex.Lock()
 	defer c.autoscalerConfigMutex.Unlock()
-	return c.autoscalerConfig
+	return c.autoscalerConfig.DeepCopy()
 }

@@ -19,12 +19,14 @@ package v1alpha1
 import (
 	"encoding/json"
 	"reflect"
+	"sort"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	buildv1alpha1 "github.com/knative/build/pkg/apis/build/v1alpha1"
+	"github.com/knative/pkg/apis"
 )
 
 // +genclient
@@ -51,9 +53,9 @@ type Revision struct {
 }
 
 // Check that Revision can be validated, can be defaulted, and has immutable fields.
-var _ Validatable = (*Revision)(nil)
-var _ Defaultable = (*Revision)(nil)
-var _ HasImmutableFields = (*Revision)(nil)
+var _ apis.Validatable = (*Revision)(nil)
+var _ apis.Defaultable = (*Revision)(nil)
+var _ apis.Immutable = (*Revision)(nil)
 
 // RevisionTemplateSpec describes the data a revision should have when created from a template.
 // Based on: https://github.com/kubernetes/api/blob/e771f807/core/v1/types.go#L3179-L3190
@@ -157,7 +159,7 @@ const (
 	// runtime resources, and becomes true when those resources are ready.
 	RevisionConditionReady RevisionConditionType = "Ready"
 	// RevisionConditionBuildComplete is set when the revision has an associated build
-	// and is marked True if/once the Build has completed succesfully.
+	// and is marked True if/once the Build has completed successfully.
 	RevisionConditionBuildSucceeded RevisionConditionType = "BuildSucceeded"
 	// RevisionConditionResourcesAvailable is set when underlying
 	// Kubernetes resources have been provisioned.
@@ -175,6 +177,25 @@ const (
 	RevisionConditionActive RevisionConditionType = "Active"
 )
 
+type RevisionConditionSlice []RevisionCondition
+
+// Len implements sort.Interface
+func (rcs RevisionConditionSlice) Len() int {
+	return len(rcs)
+}
+
+// Less implements sort.Interface
+func (rcs RevisionConditionSlice) Less(i, j int) bool {
+	return rcs[i].Type < rcs[j].Type
+}
+
+// Swap implements sort.Interface
+func (rcs RevisionConditionSlice) Swap(i, j int) {
+	rcs[i], rcs[j] = rcs[j], rcs[i]
+}
+
+var _ sort.Interface = (RevisionConditionSlice)(nil)
+
 // RevisionCondition defines a readiness condition for a Revision.
 // See: https://github.com/kubernetes/community/blob/master/contributors/devel/api-conventions.md#typical-status-properties
 type RevisionCondition struct {
@@ -183,7 +204,9 @@ type RevisionCondition struct {
 	Status corev1.ConditionStatus `json:"status" description:"status of the condition, one of True, False, Unknown"`
 
 	// +optional
-	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty" description:"last time the condition transit from one status to another"`
+	// We use VolatileTime in place of metav1.Time to exclude this from creating equality.Semantic
+	// differences (all other things held constant).
+	LastTransitionTime VolatileTime `json:"lastTransitionTime,omitempty" description:"last time the condition transit from one status to another"`
 
 	// +optional
 	Reason string `json:"reason,omitempty" description:"one-word CamelCase reason for the condition's last transition"`
@@ -205,7 +228,7 @@ type RevisionStatus struct {
 	// reconciliation processes that bring the "spec" inline with the observed
 	// state of the world.
 	// +optional
-	Conditions []RevisionCondition `json:"conditions,omitempty"`
+	Conditions RevisionConditionSlice `json:"conditions,omitempty"`
 
 	// ObservedGeneration is the 'Generation' of the Configuration that
 	// was last processed by the controller. The observed generation is updated
@@ -269,7 +292,7 @@ func (rs *RevisionStatus) setCondition(new *RevisionCondition) {
 	}
 
 	t := new.Type
-	var conditions []RevisionCondition
+	var conditions RevisionConditionSlice
 	for _, cond := range rs.Conditions {
 		if cond.Type != t {
 			conditions = append(conditions, cond)
@@ -281,18 +304,9 @@ func (rs *RevisionStatus) setCondition(new *RevisionCondition) {
 			}
 		}
 	}
-	new.LastTransitionTime = metav1.NewTime(time.Now())
+	new.LastTransitionTime = VolatileTime{metav1.NewTime(time.Now())}
 	conditions = append(conditions, *new)
-	rs.Conditions = conditions
-}
-
-func (rs *RevisionStatus) RemoveCondition(t RevisionConditionType) {
-	var conditions []RevisionCondition
-	for _, cond := range rs.Conditions {
-		if cond.Type != t {
-			conditions = append(conditions, cond)
-		}
-	}
+	sort.Sort(conditions)
 	rs.Conditions = conditions
 }
 
@@ -487,7 +501,7 @@ func (rs *RevisionStatus) IsSafeToTearDownResources() bool {
 			// Condition Unknown means the revision is in transition to inactive.
 			// TODO(#1591): We no longer need to pause in the Unknown status
 			// once we wait for Istio RouteRule propagation.
-			return time.Now().After(cond.LastTransitionTime.Add(PendingDeactivationSeconds * time.Second))
+			return time.Now().After(cond.LastTransitionTime.Inner.Add(PendingDeactivationSeconds * time.Second))
 		}
 	}
 	return false

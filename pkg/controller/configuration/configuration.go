@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 
+	commonlogkey "github.com/knative/pkg/logging/logkey"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
 	servinginformers "github.com/knative/serving/pkg/client/informers/externalversions/serving/v1alpha1"
 	listers "github.com/knative/serving/pkg/client/listers/serving/v1alpha1"
@@ -33,14 +34,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 )
 
 const controllerAgentName = "configuration-controller"
 
-// Controller implements the controller for Configuration resources
-type Controller struct {
+// Reconciler implements controller.Reconciler for Configuration resources.
+type Reconciler struct {
 	*controller.Base
 
 	// listers index properties about resources
@@ -48,56 +48,53 @@ type Controller struct {
 	revisionLister      listers.RevisionLister
 }
 
+// Check that our Reconciler implements controller.Reconciler
+var _ controller.Reconciler = (*Reconciler)(nil)
+
 // NewController creates a new Configuration controller
 func NewController(
-	opt controller.Options,
+	opt controller.ReconcileOptions,
 	configurationInformer servinginformers.ConfigurationInformer,
 	revisionInformer servinginformers.RevisionInformer,
-) *Controller {
+) *controller.Impl {
 
-	c := &Controller{
-		Base:                controller.NewBase(opt, controllerAgentName, "Configurations"),
+	c := &Reconciler{
+		Base:                controller.NewBase(opt, controllerAgentName),
 		configurationLister: configurationInformer.Lister(),
 		revisionLister:      revisionInformer.Lister(),
 	}
+	impl := controller.NewImpl(c, c.Logger, "Configurations")
 
 	c.Logger.Info("Setting up event handlers")
 	configurationInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    c.Enqueue,
-		UpdateFunc: controller.PassNew(c.Enqueue),
-		DeleteFunc: c.Enqueue,
+		AddFunc:    impl.Enqueue,
+		UpdateFunc: controller.PassNew(impl.Enqueue),
+		DeleteFunc: impl.Enqueue,
 	})
 
 	revisionInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: controller.Filter("Configuration"),
+		FilterFunc: controller.Filter(v1alpha1.SchemeGroupVersion.WithKind("Configuration")),
 		Handler: cache.ResourceEventHandlerFuncs{
-			AddFunc:    c.EnqueueControllerOf,
-			UpdateFunc: controller.PassNew(c.EnqueueControllerOf),
+			AddFunc:    impl.EnqueueControllerOf,
+			UpdateFunc: controller.PassNew(impl.EnqueueControllerOf),
 		},
 	})
-	return c
-}
-
-// Run starts the controller's worker threads, the number of which is threadiness. It then blocks until stopCh
-// is closed, at which point it shuts down its internal work queue and waits for workers to finish processing their
-// current work items.
-func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
-	return c.RunController(threadiness, stopCh, c.Reconcile, "Configuration")
+	return impl
 }
 
 // loggerWithConfigInfo enriches the logs with configuration name and namespace.
 func loggerWithConfigInfo(logger *zap.SugaredLogger, ns string, name string) *zap.SugaredLogger {
-	return logger.With(zap.String(logkey.Namespace, ns), zap.String(logkey.Configuration, name))
+	return logger.With(zap.String(commonlogkey.Namespace, ns), zap.String(logkey.Configuration, name))
 }
 
 // Reconcile compares the actual state with the desired, and attempts to
 // converge the two. It then updates the Status block of the Configuration
 // resource with the current status of the resource.
-func (c *Controller) Reconcile(key string) error {
+func (c *Reconciler) Reconcile(key string) error {
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
-		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
+		c.Logger.Errorf("invalid resource key: %s", key)
 		return nil
 	}
 	// Wrap our logger with the additional context of the configuration that we are reconciling.
@@ -108,7 +105,7 @@ func (c *Controller) Reconcile(key string) error {
 	original, err := c.configurationLister.Configurations(namespace).Get(name)
 	if errors.IsNotFound(err) {
 		// The resource no longer exists, in which case we stop processing.
-		runtime.HandleError(fmt.Errorf("configuration %q in work queue no longer exists", key))
+		logger.Errorf("configuration %q in work queue no longer exists", key)
 		return nil
 	} else if err != nil {
 		return err
@@ -132,7 +129,7 @@ func (c *Controller) Reconcile(key string) error {
 	return err
 }
 
-func (c *Controller) reconcile(ctx context.Context, config *v1alpha1.Configuration) error {
+func (c *Reconciler) reconcile(ctx context.Context, config *v1alpha1.Configuration) error {
 	logger := logging.FromContext(ctx)
 	config.Status.InitializeConditions()
 
@@ -176,9 +173,9 @@ func (c *Controller) reconcile(ctx context.Context, config *v1alpha1.Configurati
 			c.Recorder.Eventf(config, corev1.EventTypeNormal, "ConfigurationReady",
 				"Configuration becomes ready")
 		}
+		// Update the LatestReadyRevisionName and surface an event for the transition.
+		config.Status.SetLatestReadyRevisionName(latestCreatedRevision.Name)
 		if created != ready {
-			// Update the LatestReadyRevisionName and surface an event for the transition.
-			config.Status.SetLatestReadyRevisionName(latestCreatedRevision.Name)
 			c.Recorder.Eventf(config, corev1.EventTypeNormal, "LatestReadyUpdate",
 				"LatestReadyRevisionName updated to %q", latestCreatedRevision.Name)
 		}
@@ -200,7 +197,7 @@ func (c *Controller) reconcile(ctx context.Context, config *v1alpha1.Configurati
 	return nil
 }
 
-func (c *Controller) createRevision(config *v1alpha1.Configuration, revName string) (*v1alpha1.Revision, error) {
+func (c *Reconciler) createRevision(config *v1alpha1.Configuration, revName string) (*v1alpha1.Revision, error) {
 	logger := loggerWithConfigInfo(c.Logger, config.Namespace, config.Name)
 
 	buildName := ""
@@ -227,7 +224,7 @@ func (c *Controller) createRevision(config *v1alpha1.Configuration, revName stri
 	return created, nil
 }
 
-func (c *Controller) updateStatus(u *v1alpha1.Configuration) (*v1alpha1.Configuration, error) {
+func (c *Reconciler) updateStatus(u *v1alpha1.Configuration) (*v1alpha1.Configuration, error) {
 	newu, err := c.configurationLister.Configurations(u.Namespace).Get(u.Name)
 	if err != nil {
 		return nil, err

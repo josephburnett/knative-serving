@@ -71,6 +71,7 @@ var (
 	servingConfig         string
 	servingRevision       string
 	servingAutoscalerPort string
+	currentScale          int32
 	logger                *zap.SugaredLogger
 	atomicLevel           zap.AtomicLevel
 
@@ -151,6 +152,16 @@ func scaleSerializer() {
 
 func scaleTo(podCount int32) {
 	statsReporter.Report(autoscaler.DesiredPodCountM, (float64)(podCount))
+
+	// Autoscaler stops reconciling replica count and serving state
+	// when scaled to zero so that it does not fight with the
+	// Activator. A non-zero stat (any request) will increase the
+	// recommendation to 1+ and will kick the Autoscaler back into
+	// action.
+	if podCount == 0 && currentScale == 0 {
+		return
+	}
+
 	dc := kubeClient.ExtensionsV1beta1().Deployments(servingNamespace)
 	deployment, err := dc.Get(servingDeployment, metav1.GetOptions{})
 	if err != nil {
@@ -184,6 +195,7 @@ func scaleTo(podCount int32) {
 			// We will try again with the next scaleTo(0) call
 			return
 		}
+		currentScale = 0
 		return
 	}
 
@@ -203,6 +215,7 @@ func scaleTo(podCount int32) {
 	if err != nil {
 		logger.Errorf("Error updating Deployment %q: %s", servingDeployment, err)
 	}
+	currentScale = podCount
 	logger.Info("Successfully scaled.")
 }
 

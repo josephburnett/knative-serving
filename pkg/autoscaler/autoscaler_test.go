@@ -101,35 +101,6 @@ func TestAutoscaler_StableModeNoTraffic_ScaleToOne(t *testing.T) {
 	a.expectScale(t, now, 1, true)
 }
 
-func TestAutoscaler_StableModeNoTraffic_ScaleToZero(t *testing.T) {
-	a := newTestAutoscaler(v1alpha1.RevisionRequestConcurrencyModelSingle, 10.0)
-	now := a.recordLinearSeries(
-		t,
-		time.Now(),
-		linearSeries{
-			startConcurrency: 1,
-			endConcurrency:   1,
-			durationSeconds:  60,
-			podCount:         1,
-		})
-
-	a.expectScale(t, now, 1, true)
-	now = a.recordLinearSeries(
-		t,
-		now,
-		linearSeries{
-			startConcurrency: 0,
-			endConcurrency:   0,
-			durationSeconds:  300, // 5 minutes
-			podCount:         1,
-		})
-	a.expectScale(t, now, 0, true)
-
-	// Should not scale to zero again if there is no more traffic.
-	// Note: scale of 1 will be ignored since the autoscaler is not responsible for scaling from 0.
-	a.expectScale(t, now, 1, true)
-}
-
 func TestAutoscaler_ScaledToZero_StableRecommendation(t *testing.T) {
 	a := newTestAutoscaler(v1alpha1.RevisionRequestConcurrencyModelSingle, 10.0)
 	now := a.recordLinearSeries(

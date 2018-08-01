@@ -87,7 +87,7 @@ func TestIsActive(t *testing.T) {
 }
 
 func TestIsSafeToTearDownResources(t *testing.T) {
-	tZero := metav1.NewTime(time.Now())
+	tZero := VolatileTime{metav1.NewTime(time.Now())}
 	cases := []struct {
 		name                      string
 		status                    RevisionStatus
@@ -134,7 +134,7 @@ func TestIsSafeToTearDownResources(t *testing.T) {
 			Conditions: []RevisionCondition{{
 				Type:               RevisionConditionActive,
 				Status:             corev1.ConditionFalse,
-				LastTransitionTime: metav1.NewTime(tZero.Add(-(PendingDeactivationSeconds + 1) * time.Second)),
+				LastTransitionTime: VolatileTime{metav1.NewTime(tZero.Inner.Add(-(PendingDeactivationSeconds + 1) * time.Second))},
 			}},
 		},
 		isSafeToTearDownResources: true,
@@ -144,7 +144,7 @@ func TestIsSafeToTearDownResources(t *testing.T) {
 			Conditions: []RevisionCondition{{
 				Type:               RevisionConditionActive,
 				Status:             corev1.ConditionUnknown,
-				LastTransitionTime: metav1.NewTime(tZero.Add(-(PendingDeactivationSeconds + 1) * time.Second)),
+				LastTransitionTime: VolatileTime{metav1.NewTime(tZero.Inner.Add(-(PendingDeactivationSeconds + 1) * time.Second))},
 			}},
 		},
 		isSafeToTearDownResources: true,

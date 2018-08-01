@@ -114,6 +114,9 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "first-reconcile", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
+						Type:   "Active",
+						Status: "True",
+					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -125,9 +128,6 @@ func TestReconcile(t *testing.T) {
 						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
-					}, {
-						Type:   "Active",
-						Status: "True",
 					}},
 				}),
 		}},
@@ -158,6 +158,9 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "update-status-failure", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
+						Type:   "Active",
+						Status: "True",
+					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -169,9 +172,6 @@ func TestReconcile(t *testing.T) {
 						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
-					}, {
-						Type:   "Active",
-						Status: "True",
 					}},
 				}),
 		}},
@@ -199,6 +199,9 @@ func TestReconcile(t *testing.T) {
 				v1alpha1.RevisionStatus{
 					LogURL: "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
+						Type:   "Active",
+						Status: "True",
+					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -210,9 +213,6 @@ func TestReconcile(t *testing.T) {
 						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
-					}, {
-						Type:   "Active",
-						Status: "True",
 					}},
 				}),
 		}},
@@ -242,6 +242,9 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "create-user-service-failure", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
+						Type:   "Active",
+						Status: "True",
+					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -253,9 +256,6 @@ func TestReconcile(t *testing.T) {
 						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
-					}, {
-						Type:   "Active",
-						Status: "True",
 					}},
 				}),
 		}},
@@ -289,7 +289,7 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
+						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -332,7 +332,7 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
+						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -363,11 +363,11 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
+						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "ContainerHealthy",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -396,13 +396,13 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "True",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "True",
 					}, {
 						Type:   "Ready",
+						Status: "True",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "True",
 					}},
 				}),
@@ -421,20 +421,15 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
-						Type:    "Ready",
-						Status:  "False",
-						Reason:  "Inactive",
-						Message: `Revision "deactivate" is Inactive.`,
-					}, {
-						Type:   "ResourcesAvailable",
+						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},
@@ -453,8 +448,11 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "reconcile-replicas-1-pending", "Reserve", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
-						Status: "True",
+						Type:               "Active",
+						Status:             "Unknown",
+						Reason:             "PendingDeactivation",
+						Message:            "Revision has not received traffic recently. Deactivation pending route updates.",
+						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now())},
 					}, {
 						Type:   "ContainerHealthy",
 						Status: "True",
@@ -464,11 +462,8 @@ func TestReconcile(t *testing.T) {
 						Reason:  "PendingDeactivation",
 						Message: "Revision has not received traffic recently. Deactivation pending route updates.",
 					}, {
-						Type:               "Active",
-						Status:             "Unknown",
-						Reason:             "PendingDeactivation",
-						Message:            "Revision has not received traffic recently. Deactivation pending route updates.",
-						LastTransitionTime: metav1.NewTime(time.Now()),
+						Type:   "ResourcesAvailable",
+						Status: "True",
 					}},
 				}),
 			withReplicaCount(0, deploy("foo", "reconcile-replicas-1-pending", "Reserve", "busybox")),
@@ -504,12 +499,12 @@ func TestReconcile(t *testing.T) {
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:    "ResourcesAvailable",
+						Type:    "Ready",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:    "Ready",
+						Type:    "ResourcesAvailable",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
@@ -539,12 +534,12 @@ func TestReconcile(t *testing.T) {
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:    "ResourcesAvailable",
+						Type:    "Ready",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:    "Ready",
+						Type:    "ResourcesAvailable",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
@@ -575,13 +570,13 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "True",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "True",
 					}, {
 						Type:   "Ready",
+						Status: "True",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "True",
 					}},
 				}),
@@ -603,21 +598,21 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "deactivate-one", "Reserve", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
-						Status: "True",
-					}, {
-						Type:   "ContainerHealthy",
-						Status: "True",
-					}, {
 						Type:    "Active",
 						Status:  "Unknown",
 						Reason:  "PendingDeactivation",
 						Message: "Revision has not received traffic recently. Deactivation pending route updates.",
 					}, {
+						Type:   "ContainerHealthy",
+						Status: "True",
+					}, {
 						Type:    "Ready",
 						Status:  "Unknown",
 						Reason:  "PendingDeactivation",
 						Message: "Revision has not received traffic recently. Deactivation pending route updates.",
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "True",
 					}},
 				}),
 		}},
@@ -637,8 +632,9 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "deactivate-two", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
-						Status: "True",
+						Type:               "Active",
+						Status:             "Unknown",
+						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now().Add(-121 * time.Second))},
 					}, {
 						Type:   "ContainerHealthy",
 						Status: "True",
@@ -646,9 +642,8 @@ func TestReconcile(t *testing.T) {
 						Type:   "Ready",
 						Status: "True",
 					}, {
-						Type:               "Active",
-						Status:             "Unknown",
-						LastTransitionTime: metav1.NewTime(time.Now().Add(-121 * time.Second)),
+						Type:   "ResourcesAvailable",
+						Status: "True",
 					}},
 				}),
 			// The Deployments match what we'd expect of an Active revision.
@@ -669,7 +664,7 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "deactivate-two", "Reserve", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:    "ResourcesAvailable",
+						Type:    "Active",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
@@ -679,12 +674,12 @@ func TestReconcile(t *testing.T) {
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:    "Active",
+						Type:    "Ready",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:    "Ready",
+						Type:    "ResourcesAvailable",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
@@ -712,7 +707,7 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "update-user-deploy-failure", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:    "ResourcesAvailable",
+						Type:    "Active",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
@@ -722,12 +717,12 @@ func TestReconcile(t *testing.T) {
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:    "Active",
+						Type:    "Ready",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:    "Ready",
+						Type:    "ResourcesAvailable",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
@@ -811,9 +806,11 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "update-autoscaler-deploy-failure", "Reserve", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Reserve",
+						Type:               "Active",
+						Status:             "False",
+						Reason:             "Deactivated",
+						Message:            "Revision has not received traffic recently.",
+						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now().Add(-121 * time.Second))},
 					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
@@ -823,11 +820,9 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Reserve",
 					}, {
-						Type:               "Active",
-						Status:             "False",
-						Reason:             "Deactivated",
-						Message:            "Revision has not received traffic recently.",
-						LastTransitionTime: metav1.NewTime(time.Now().Add(-121 * time.Second)),
+						Type:   "ResourcesAvailable",
+						Status: "Unknown",
+						Reason: "Reserve",
 					}},
 				}),
 			// The Deployments match what we'd expect of a Reserve revision.
@@ -857,7 +852,7 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "retire", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
+						Type:   "Active",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -865,11 +860,11 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "Active",
+						Type:   "Ready",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "Ready",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},
@@ -889,7 +884,7 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "retire", "Retired", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:    "ResourcesAvailable",
+						Type:    "Active",
 						Status:  "False",
 						Reason:  "Retired",
 						Message: "Revision has been retired.",
@@ -899,12 +894,12 @@ func TestReconcile(t *testing.T) {
 						Reason:  "Retired",
 						Message: "Revision has been retired.",
 					}, {
-						Type:    "Active",
+						Type:    "Ready",
 						Status:  "False",
 						Reason:  "Retired",
 						Message: "Revision has been retired.",
 					}, {
-						Type:    "Ready",
+						Type:    "ResourcesAvailable",
 						Status:  "False",
 						Reason:  "Retired",
 						Message: "Revision has been retired.",
@@ -943,10 +938,6 @@ func TestReconcile(t *testing.T) {
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -955,6 +946,10 @@ func TestReconcile(t *testing.T) {
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "Unknown",
+						Reason: "Deploying",
 					}},
 				}),
 			// The Deployments match what we'd expect of an Active revision.
@@ -991,10 +986,6 @@ func TestReconcile(t *testing.T) {
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -1003,6 +994,10 @@ func TestReconcile(t *testing.T) {
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "Unknown",
+						Reason: "Deploying",
 					}},
 				}),
 			// The Deployments match what we'd expect of an Active revision.
@@ -1038,10 +1033,6 @@ func TestReconcile(t *testing.T) {
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -1050,6 +1041,10 @@ func TestReconcile(t *testing.T) {
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "Unknown",
+						Reason: "Deploying",
 					}},
 				}),
 			// The Deployments match what we'd expect of an Active revision.
@@ -1084,10 +1079,6 @@ func TestReconcile(t *testing.T) {
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Retired",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Retired",
@@ -1096,6 +1087,10 @@ func TestReconcile(t *testing.T) {
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "Unknown",
+						Reason: "Retired",
 					}},
 				}),
 			// The Services match what we'd expect of an Active revision.
@@ -1125,11 +1120,11 @@ func TestReconcile(t *testing.T) {
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:   "ResourcesAvailable",
+						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Retired",
 					}, {
-						Type:   "ContainerHealthy",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Retired",
 					}, {
@@ -1161,15 +1156,15 @@ func TestReconcile(t *testing.T) {
 						Status: "False",
 						Reason: "Deactivated",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Retired",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Retired",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Retired",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Retired",
 					}},
@@ -1194,7 +1189,7 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
+						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -1235,6 +1230,11 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "create-in-reserve", "Reserve", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
+						Type:    "Active",
+						Status:  "Unknown",
+						Reason:  "PendingDeactivation",
+						Message: "Revision has not received traffic recently. Deactivation pending route updates.",
+					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -1243,12 +1243,7 @@ func TestReconcile(t *testing.T) {
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:    "Active",
-						Status:  "Unknown",
-						Reason:  "PendingDeactivation",
-						Message: "Revision has not received traffic recently. Deactivation pending route updates.",
-					}, {
-						Type:   "Ready",
+						Type:   "ResourceAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},
@@ -1268,19 +1263,19 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "create-in-reserve", "Reserve", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
+						Type:               "Active",
+						Status:             "Unknown",
+						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now().Add(-121 * time.Second))},
+					}, {
 						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "ContainerHealthy",
+						Type:   "Ready",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:               "Active",
-						Status:             "Unknown",
-						LastTransitionTime: metav1.NewTime(time.Now().Add(-121 * time.Second)),
-					}, {
-						Type:   "Ready",
+						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},
@@ -1304,17 +1299,17 @@ func TestReconcile(t *testing.T) {
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
-						Type:    "ResourcesAvailable",
-						Status:  "False",
-						Reason:  "Deactivated",
-						Message: "Revision has not received traffic recently.",
-					}, {
 						Type:    "ContainerHealthy",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
 					}, {
 						Type:    "Ready",
+						Status:  "False",
+						Reason:  "Deactivated",
+						Message: "Revision has not received traffic recently.",
+					}, {
+						Type:    "ResourcesAvailable",
 						Status:  "False",
 						Reason:  "Deactivated",
 						Message: "Revision has not received traffic recently.",
@@ -1343,11 +1338,11 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
+						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "ContainerHealthy",
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
@@ -1383,10 +1378,6 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -1396,6 +1387,10 @@ func TestReconcile(t *testing.T) {
 						Reason: "Deploying",
 						// The LTT defaults and is long enough ago that we expire waiting
 						// on the Endpoints to become ready.
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "Unknown",
+						Reason: "Deploying",
 					}},
 				}),
 			deploy("foo", "endpoint-created-timeout", "Active", "busybox"),
@@ -1449,15 +1444,15 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},
@@ -1477,9 +1472,6 @@ func TestReconcile(t *testing.T) {
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
 						Type:   "Active",
-						Status: "True",
-					}, {
-						Type:   "ResourcesAvailable",
 						Status: "True",
 					}, {
 						Type:   "ContainerHealthy",
@@ -1512,10 +1504,6 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -1525,6 +1513,10 @@ func TestReconcile(t *testing.T) {
 						Reason: "Deploying",
 						// We set the LTT so that we don't give up on the Endpoints yet.
 						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now())},
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "Unknown",
+						Reason: "Deploying",
 					}},
 				}),
 			deploy("foo", "fix-mutated-service", "Active", "busybox"),
@@ -1545,7 +1537,7 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
+						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Updating",
 					}, {
@@ -1581,10 +1573,6 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -1594,6 +1582,10 @@ func TestReconcile(t *testing.T) {
 						Reason: "Deploying",
 						// We set the LTT so that we don't give up on the Endpoints yet.
 						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now())},
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "Unknown",
+						Reason: "Deploying",
 					}},
 				}),
 			deploy("foo", "update-user-svc-failure", "Active", "busybox"),
@@ -1624,10 +1616,6 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -1637,6 +1625,10 @@ func TestReconcile(t *testing.T) {
 						Reason: "Deploying",
 						// We set the LTT so that we don't give up on the Endpoints yet.
 						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now())},
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "Unknown",
+						Reason: "Deploying",
 					}},
 				}),
 			deploy("foo", "update-as-svc-failure", "Active", "busybox"),
@@ -1664,22 +1656,22 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "deploy-timeout", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
+						Type:   "Active",
+						Status: "True",
 					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
-					}, {
-						Type:   "Active",
-						Status: "True",
 					}, {
 						Type:   "Ready",
 						Status: "Unknown",
 						Reason: "Deploying",
 						// We set the LTT so that we don't give up on the Endpoints yet.
 						LastTransitionTime: v1alpha1.VolatileTime{metav1.NewTime(time.Now())},
+					}, {
+						Type:   "ResourcesAvailable",
+						Status: "Unknown",
+						Reason: "Deploying",
 					}},
 				}),
 			timeoutDeploy(deploy("foo", "deploy-timeout", "Active", "busybox")),
@@ -1696,14 +1688,14 @@ func TestReconcile(t *testing.T) {
 					ServiceName: svc("foo", "deploy-timeout", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
+						Type:   "Active",
+						Status: "True",
+					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
-						Type:   "Active",
-						Status: "True",
-					}, {
-						Type:    "ResourcesAvailable",
+						Type:    "Ready",
 						Status:  "False",
 						Reason:  "ProgressDeadlineExceeded",
 						Message: "Unable to create pods for more than 120 seconds.",
@@ -1733,13 +1725,13 @@ func TestReconcile(t *testing.T) {
 				v1alpha1.RevisionStatus{
 					LogURL: "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
+						Type:   "Active",
+						Status: "Unknown",
+					}, {
 						Type:   "BuildSucceeded",
 						Status: "Unknown",
 					}, {
 						Type:   "ContainerHealthy",
-						Status: "Unknown",
-					}, {
-						Type:   "Active",
 						Status: "Unknown",
 					}, {
 						Type:   "Ready",
@@ -1772,14 +1764,14 @@ func TestReconcile(t *testing.T) {
 				v1alpha1.RevisionStatus{
 					LogURL: "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
+						Type:   "Active",
+						Status: "Unknown",
+					}, {
 						Type:   "BuildSucceeded",
 						Status: "Unknown",
 						Reason: "Building",
 					}, {
 						Type:   "ContainerHealthy",
-						Status: "Unknown",
-					}, {
-						Type:   "Active",
 						Status: "Unknown",
 					}, {
 						Type:   "BuildSucceeded",
@@ -1808,7 +1800,7 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
+						Type:   "BuildSucceeded",
 						Status: "Unknown",
 					}, {
 						Type:   "ContainerHealthy",
@@ -1919,7 +1911,7 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
+						Type:   "BuildSucceeded",
 						Status: "Unknown",
 					}, {
 						Type:   "ContainerHealthy",
@@ -1948,9 +1940,6 @@ func TestReconcile(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 					}, {
@@ -1958,9 +1947,6 @@ func TestReconcile(t *testing.T) {
 						Status:  "False",
 						Reason:  "SomeReason",
 						Message: "This is why the build failed.",
-					}, {
-						Type:   "ContainerHealthy",
-						Status: "Unknown",
 					}, {
 						Type:    "Ready",
 						Status:  "False",
@@ -2097,6 +2083,9 @@ func TestReconcileWithVarLogEnabled(t *testing.T) {
 					ServiceName: svc("foo", "first-reconcile-var-log", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
+						Type:   "Active",
+						Status: "True",
+					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -2108,9 +2097,6 @@ func TestReconcileWithVarLogEnabled(t *testing.T) {
 						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
-					}, {
-						Type:   "Active",
-						Status: "True",
 					}},
 				}),
 		}},
@@ -2140,6 +2126,9 @@ func TestReconcileWithVarLogEnabled(t *testing.T) {
 					ServiceName: svc("foo", "create-configmap-failure", "Active", "busybox").Name,
 					LogURL:      "http://logger.io/test-uid",
 					Conditions: []v1alpha1.RevisionCondition{{
+						Type:   "Active",
+						Status: "True",
+					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
@@ -2151,9 +2140,6 @@ func TestReconcileWithVarLogEnabled(t *testing.T) {
 						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
-					}, {
-						Type:   "Active",
-						Status: "True",
 					}},
 				}),
 		}},
@@ -2171,15 +2157,15 @@ func TestReconcileWithVarLogEnabled(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},
@@ -2257,15 +2243,15 @@ func TestReconcileWithVarLogEnabled(t *testing.T) {
 						Type:   "Active",
 						Status: "True",
 					}, {
-						Type:   "ResourcesAvailable",
-						Status: "Unknown",
-						Reason: "Deploying",
-					}, {
 						Type:   "ContainerHealthy",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}, {
 						Type:   "Ready",
+						Status: "Unknown",
+						Reason: "Deploying",
+					}, {
+						Type:   "ResourcesAvailable",
 						Status: "Unknown",
 						Reason: "Deploying",
 					}},

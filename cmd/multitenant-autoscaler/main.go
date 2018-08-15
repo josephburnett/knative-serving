@@ -37,7 +37,6 @@ import (
 	"go.opencensus.io/stats/view"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -186,24 +185,8 @@ func main() {
 	statsServer.Shutdown(time.Second * 5)
 }
 
-func uniScalerFactory(rev *v1alpha1.Revision, config *autoscaler.Config) (autoscaler.UniScaler, error) {
-	// Create a stats reporter which tags statistics by revision namespace, revision controller name, and revision name.
-	reporter, err := autoscaler.NewStatsReporter(rev.Namespace, revisionControllerName(rev), rev.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	return autoscaler.New(config, rev.Spec.ConcurrencyModel, reporter), nil
-}
-
-func revisionControllerName(rev *v1alpha1.Revision) string {
-	var controllerName string
-	// Get the name of the revision's controller. If the revision has no controller, use the empty string as the
-	// controller name.
-	if controller := metav1.GetControllerOf(rev); controller != nil {
-		controllerName = controller.Name
-	}
-	return controllerName
+func uniScalerFactory(rev *v1alpha1.Revision, config *autoscaler.Config) autoscaler.UniScaler {
+	return autoscaler.New(config, rev.Spec.ConcurrencyModel)
 }
 
 func init() {

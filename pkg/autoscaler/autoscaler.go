@@ -119,18 +119,16 @@ type Autoscaler struct {
 	panicking                    bool
 	panicTime                    *time.Time
 	maxPanicPods                 float64
-	reporter                     StatsReporter
 	lastRequestTime              time.Time
 	scaleToZeroThresholdExceeded bool
 }
 
 // New creates a new instance of autoscaler
-func New(config *Config, model v1alpha1.RevisionRequestConcurrencyModelType, reporter StatsReporter) *Autoscaler {
+func New(config *Config, model v1alpha1.RevisionRequestConcurrencyModelType) *Autoscaler {
 	return &Autoscaler{
 		Config:                       config,
 		model:                        model,
 		stats:                        make(map[statKey]Stat),
-		reporter:                     reporter,
 		lastRequestTime:              time.Now(),
 		scaleToZeroThresholdExceeded: false,
 	}
@@ -154,7 +152,7 @@ func (a *Autoscaler) Record(ctx context.Context, stat Stat) {
 }
 
 // Scale calculates the desired scale based on current statistics given the current time.
-func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
+func (a *Autoscaler) Scale(ctx context.Context, now time.Time, reporter StatsReporter) (int32, bool) {
 	logger := logging.FromContext(ctx)
 	a.statsMutex.Lock()
 	defer a.statsMutex.Unlock()
@@ -229,10 +227,10 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	desiredStablePodCount := desiredStableScalingRatio * float64(stableData.observedPods())
 	desiredPanicPodCount := desiredPanicScalingRatio * float64(stableData.observedPods())
 
-	a.reporter.Report(ObservedPodCountM, float64(stableData.observedPods()))
-	a.reporter.Report(ObservedStableConcurrencyM, observedStableConcurrencyPerPod)
-	a.reporter.Report(ObservedPanicConcurrencyM, observedPanicConcurrencyPerPod)
-	a.reporter.Report(TargetConcurrencyM, a.TargetConcurrency(a.model))
+	reporter.Report(ObservedPodCountM, float64(stableData.observedPods()))
+	reporter.Report(ObservedStableConcurrencyM, observedStableConcurrencyPerPod)
+	reporter.Report(ObservedPanicConcurrencyM, observedPanicConcurrencyPerPod)
+	reporter.Report(TargetConcurrencyM, a.TargetConcurrency(a.model))
 
 	logger.Debugf("STABLE: Observed average %0.3f concurrency over %v seconds over %v samples over %v pods.",
 		observedStableConcurrencyPerPod, a.StableWindow, stableData.probeCount, stableData.observedPods())
@@ -242,7 +240,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	// Stop panicking after the surge has made its way into the stable metric.
 	if a.panicking && a.panicTime.Add(a.StableWindow).Before(now) {
 		logger.Info("Un-panicking.")
-		a.reporter.Report(PanicM, 0)
+		reporter.Report(PanicM, 0)
 		a.panicking = false
 		a.panicTime = nil
 		a.maxPanicPods = 0
@@ -251,7 +249,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	// Begin panicking when we cross the 6 second concurrency threshold.
 	if !a.panicking && panicData.observedPods() > 0 && observedPanicConcurrencyPerPod >= (a.TargetConcurrency(a.model)*2) {
 		logger.Info("PANICKING")
-		a.reporter.Report(PanicM, 1)
+		reporter.Report(PanicM, 1)
 		a.panicking = true
 		a.panicTime = &now
 	}

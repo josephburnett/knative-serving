@@ -27,6 +27,7 @@ import (
 	"github.com/knative/serving/pkg/logging"
 	"github.com/knative/serving/pkg/logging/logkey"
 	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -44,16 +45,16 @@ type UniScaler interface {
 
 	// Scale either proposes a number of replicas or skips proposing. The proposal is requested at the given time.
 	// The returned boolean is true if and only if a proposal was returned.
-	Scale(context.Context, time.Time) (int32, bool)
+	Scale(context.Context, time.Time, *Reporter) (int32, bool)
 }
 
 // UniScalerFactory creates a UniScaler for a given revision using the given configuration.
-type UniScalerFactory func(*v1alpha1.Revision, *Config) (UniScaler, error)
+type UniScalerFactory func(*v1alpha1.Revision, *Config) UniScaler
 
 // RevisionScaler knows how to scale revisions.
 type RevisionScaler interface {
 	// Scale attempts to scale the given revision to the desired scale.
-	Scale(rev *v1alpha1.Revision, desiredScale int32)
+	Scale(rev *v1alpha1.Revision, desiredScale int32, reporter *Reporter)
 }
 
 // scalerRunner wraps a UniScaler and a channel for implementing shutdown behavior.
@@ -132,18 +133,21 @@ func loggerWithRevisionInfo(logger *zap.SugaredLogger, ns string, name string) *
 }
 
 func (m *MultiScaler) createScaler(ctx context.Context, rev *v1alpha1.Revision) (*scalerRunner, error) {
-	scaler, err := m.uniScalerFactory(rev, m.config)
+	// Create a stats reporter which tags statistics by revision namespace, revision controller name, and revision name.
+	reporter, err := NewStatsReporter(rev.Namespace, revisionControllerName(rev), rev.Name)
 	if err != nil {
 		return nil, err
 	}
 
+	scaler := m.uniScalerFactory(rev, m.config)
 	stopCh := make(chan struct{})
-	runner := &scalerRunner{scaler: scaler, stopCh: stopCh}
+	runner := &scalerRunner{scaler, stopCh}
 
 	ticker := time.NewTicker(m.config.TickInterval)
 
 	scaleChan := make(chan int32, scaleBufferSize)
 
+	// Collect recommendations
 	go func() {
 		for {
 			select {
@@ -154,13 +158,14 @@ func (m *MultiScaler) createScaler(ctx context.Context, rev *v1alpha1.Revision) 
 				ticker.Stop()
 				return
 			case <-ticker.C:
-				m.tickScaler(ctx, scaler, scaleChan)
+				m.tickScaler(ctx, scaler, scaleChan, reporter)
 			}
 		}
 	}()
 
 	logger := logging.FromContext(ctx)
 
+	// Actuate recommendations
 	go func() {
 		for {
 			select {
@@ -169,7 +174,7 @@ func (m *MultiScaler) createScaler(ctx context.Context, rev *v1alpha1.Revision) 
 			case <-stopCh:
 				return
 			case desiredScale := <-scaleChan:
-				m.revisionScaler.Scale(rev, mostRecentDesiredScale(desiredScale, scaleChan, logger))
+				m.revisionScaler.Scale(rev, mostRecentDesiredScale(desiredScale, scaleChan, logger), reporter)
 			}
 		}
 	}()
@@ -189,9 +194,9 @@ func mostRecentDesiredScale(desiredScale int32, scaleChan chan int32, logger *za
 	}
 }
 
-func (m *MultiScaler) tickScaler(ctx context.Context, scaler UniScaler, scaleChan chan<- int32) {
+func (m *MultiScaler) tickScaler(ctx context.Context, scaler UniScaler, scaleChan chan<- int32, reporter *Reporter) {
 	logger := logging.FromContext(ctx)
-	desiredScale, scaled := scaler.Scale(ctx, time.Now())
+	desiredScale, scaled := scaler.Scale(ctx, time.Now(), reporter)
 
 	if scaled {
 		// Cannot scale negative.
@@ -227,4 +232,14 @@ func (m *MultiScaler) RecordStat(revKey string, stat Stat) {
 		ctx := logging.WithLogger(context.TODO(), logger)
 		scaler.scaler.Record(ctx, stat)
 	}
+}
+
+func revisionControllerName(rev *v1alpha1.Revision) string {
+	var controllerName string
+	// Get the name of the revision's controller. If the revision has no controller, use the empty string as the
+	// controller name.
+	if controller := metav1.GetControllerOf(rev); controller != nil {
+		controllerName = controller.Name
+	}
+	return controllerName
 }

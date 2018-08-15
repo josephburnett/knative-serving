@@ -33,7 +33,7 @@ type revisionScaler struct {
 }
 
 // NewRevisionScaler creates a revisionScaler.
-func NewRevisionScaler(servingClientSet clientset.Interface, kubeClientSet kubernetes.Interface, logger *zap.SugaredLogger) RevisionScaler {
+func NewRevisionScaler(servingClientSet clientset.Interface, kubeClientSet kubernetes.Interface, logger *zap.SugaredLogger) *revisionScaler {
 	return &revisionScaler{
 		servingClientSet: servingClientSet,
 		kubeClientSet:    kubeClientSet,
@@ -42,8 +42,9 @@ func NewRevisionScaler(servingClientSet clientset.Interface, kubeClientSet kuber
 }
 
 // Scale attempts to scale the given revision to the desired scale.
-func (rs *revisionScaler) Scale(oldRev *v1alpha1.Revision, desiredScale int32) {
+func (rs *revisionScaler) Scale(oldRev *v1alpha1.Revision, desiredScale int32, reporter *Reporter) {
 	logger := loggerWithRevisionInfo(rs.logger, oldRev.Namespace, oldRev.Name)
+	reporter.Report(DesiredPodCountM, (float64)(desiredScale))
 
 	// Do not scale an inactive revision.
 	// FIXME: given the input oldRev is stale, it might be better to pass in the revision's name and namespace instead.
@@ -62,6 +63,7 @@ func (rs *revisionScaler) Scale(oldRev *v1alpha1.Revision, desiredScale int32) {
 		return
 	}
 	currentScale := *deployment.Spec.Replicas
+	reporter.Report(ActualPodCountM, (float64)(currentScale))
 
 	if desiredScale == currentScale {
 		return
@@ -95,4 +97,5 @@ func (rs *revisionScaler) Scale(oldRev *v1alpha1.Revision, desiredScale int32) {
 	}
 
 	logger.Debug("Successfully scaled.")
+	reporter.Report(RequestedPodCountM, (float64)(desiredScale))
 }

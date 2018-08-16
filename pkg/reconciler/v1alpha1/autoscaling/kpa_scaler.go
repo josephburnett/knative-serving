@@ -18,6 +18,7 @@ package autoscaling
 
 import (
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +28,11 @@ import (
 	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
 	clientset "github.com/knative/serving/pkg/client/clientset/versioned"
+)
+
+var (
+	// The period we wait after Active=False before actually scaling to zero.
+	gracePeriod = 60 * time.Second
 )
 
 // kpaScaler scales the target of a KPA up or down including scaling to zero.
@@ -110,8 +116,10 @@ func (rs *kpaScaler) Scale(kpa *kpa.PodAutoscaler, desiredScale int32) error {
 
 	// When scaling to zero, flip the revision's ServingState to Reserve.
 	if desiredScale == 0 {
-		// TODO(mattmoor): Delay the scale to zero until the LTT of "Active=False"
-		// is some time in the past.
+		if !kpa.Status.CanScaleToZero(gracePeriod) {
+			logger.Debug("Waiting for Active=False grace period.")
+			return nil
+		}
 		logger.Debug("Setting revision ServingState to Reserve.")
 		rev.Spec.ServingState = v1alpha1.RevisionServingStateReserve
 		if _, err := revisionClient.Update(rev); err != nil {

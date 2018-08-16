@@ -50,14 +50,33 @@ func TestKPAScaler(t *testing.T) {
 		wantState     v1alpha1.RevisionServingStateType
 		wantReplicas  int
 		wantScaling   bool
+		kpaMutation   func(*kpa.PodAutoscaler)
 	}{{
-		label:         "scales to zero",
+		label:         "waits to scale to zero",
+		startState:    v1alpha1.RevisionServingStateActive,
+		startReplicas: 1,
+		scaleTo:       0,
+		wantState:     v1alpha1.RevisionServingStateActive,
+		wantReplicas:  1,
+		wantScaling:   false,
+		kpaMutation: func(kpa *kpa.PodAutoscaler) {
+			kpa.Status.MarkInactive("foo", "bar")
+		},
+	}, {
+		label:         "scale to zero after grace period",
 		startState:    v1alpha1.RevisionServingStateActive,
 		startReplicas: 1,
 		scaleTo:       0,
 		wantState:     v1alpha1.RevisionServingStateReserve,
 		wantReplicas:  1,
 		wantScaling:   false,
+		kpaMutation: func(k *kpa.PodAutoscaler) {
+			k.Status.Conditions = []kpa.PodAutoscalerCondition{{
+				Type:   "Active",
+				Status: "False",
+				// No LTT == a long long time ago
+			}}
+		},
 	}, {
 		label:         "scales up",
 		startState:    v1alpha1.RevisionServingStateActive,
@@ -103,6 +122,10 @@ func TestKPAScaler(t *testing.T) {
 			revisionScaler := autoscaling.NewKPAScaler(servingClient, scaleClient, TestLogger(t))
 
 			kpa := newKPA(t, servingClient, revision)
+			if e.kpaMutation != nil {
+				e.kpaMutation(kpa)
+			}
+
 			revisionScaler.Scale(kpa, e.scaleTo)
 
 			checkServingState(t, servingClient, e.wantState)
@@ -118,6 +141,7 @@ func TestKPAScaler(t *testing.T) {
 
 func newKPA(t *testing.T, servingClient clientset.Interface, revision *v1alpha1.Revision) *kpa.PodAutoscaler {
 	kpa := revisionresources.MakeKPA(revision)
+	kpa.Status.InitializeConditions()
 	_, err := servingClient.AutoscalingV1alpha1().PodAutoscalers(testNamespace).Create(kpa)
 	if err != nil {
 		t.Fatal("Failed to create KPA.", err)

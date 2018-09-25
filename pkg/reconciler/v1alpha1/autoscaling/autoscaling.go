@@ -24,7 +24,7 @@ import (
 	"github.com/knative/pkg/controller"
 	"github.com/knative/pkg/logging"
 	"github.com/knative/serving/pkg/apis/autoscaling"
-	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
+	v1kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/autoscaler"
 	informers "github.com/knative/serving/pkg/client/informers/externalversions/autoscaling/v1alpha1"
 	listers "github.com/knative/serving/pkg/client/listers/autoscaling/v1alpha1"
@@ -45,11 +45,11 @@ const (
 
 // KPAMetrics is an interface for notifying the presence or absence of KPAs.
 type KPAMetrics interface {
-	// Get accesses the Metric resource for this key, returning any errors.
-	Get(ctx context.Context, key string) (*autoscaler.Metric, error)
+	// Get accesses the Metric resource for this key, if any, returning any errors.
+	Get(ctx context.Context, key string) (*autoscaler.Metric, bool, error)
 
-	// Create adds a Metric resource for a given key, returning any errors.
-	Create(ctx context.Context, kpa *kpa.PodAutoscaler) (*autoscaler.Metric, error)
+	// Create adds a Metric resource for a given key, if any, returning any errors.
+	Create(ctx context.Context, kpa *v1kpa.PodAutoscaler) (*autoscaler.Metric, bool, error)
 
 	// Delete removes the Metric resource for a given key, returning any errors.
 	Delete(ctx context.Context, key string) error
@@ -61,7 +61,7 @@ type KPAMetrics interface {
 // KPAScaler knows how to scale the targets of KPAs
 type KPAScaler interface {
 	// Scale attempts to scale the given KPA's target to the desired scale.
-	Scale(ctx context.Context, kpa *kpa.PodAutoscaler, desiredScale int32) error
+	Scale(ctx context.Context, kpa *v1kpa.PodAutoscaler, desiredScale int32) error
 }
 
 // Reconciler tracks KPAs and right sizes the ScaleTargetRef based on the
@@ -162,19 +162,23 @@ func (c *Reconciler) Reconcile(ctx context.Context, key string) error {
 			logger.Warn("Failed to update kpa status", zap.Error(err))
 			return err
 		}
+		if original.Spec.ServingState == v1kpa.ServingStateReserve && kpa.Spec.ServingState == v1kpa.ServingStateActive {
+			// Kick the KPA back out of reserve
+
+		}
 	}
 	return err
 }
 
-func (c *Reconciler) reconcile(ctx context.Context, key string, kpa *kpa.PodAutoscaler) error {
+func (c *Reconciler) reconcile(ctx context.Context, key string, kpa *v1kpa.PodAutoscaler) error {
 	logger := logging.FromContext(ctx)
 
 	kpa.Status.InitializeConditions()
 	logger.Debug("KPA exists")
 
-	metric, err := c.kpaMetrics.Get(ctx, key)
+	metric, ok, err := c.kpaMetrics.Get(ctx, key)
 	if errors.IsNotFound(err) {
-		metric, err = c.kpaMetrics.Create(ctx, kpa)
+		metric, ok, err = c.kpaMetrics.Create(ctx, kpa)
 		if err != nil {
 			logger.Errorf("Error creating Metric: %v", err)
 			return err
@@ -182,6 +186,10 @@ func (c *Reconciler) reconcile(ctx context.Context, key string, kpa *kpa.PodAuto
 	} else if err != nil {
 		logger.Errorf("Error fetching Metric: %v", err)
 		return err
+	}
+	if !ok {
+		logger.Debugf("No data for %v. Doing nothing.", key)
+		return nil
 	}
 
 	// Get the appropriate current scale from the metric, and right size
@@ -227,7 +235,7 @@ func (c *Reconciler) reconcile(ctx context.Context, key string, kpa *kpa.PodAuto
 	return nil
 }
 
-func (c *Reconciler) updateStatus(kpa *kpa.PodAutoscaler) (*kpa.PodAutoscaler, error) {
+func (c *Reconciler) updateStatus(kpa *v1kpa.PodAutoscaler) (*v1kpa.PodAutoscaler, error) {
 	newKPA, err := c.kpaLister.PodAutoscalers(kpa.Namespace).Get(kpa.Name)
 	if err != nil {
 		return nil, err

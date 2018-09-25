@@ -34,6 +34,8 @@ const (
 	// seconds while an http request is taking the full timeout of 5
 	// second.
 	scaleBufferSize = 10
+
+	noData = -1
 )
 
 type Metric struct {
@@ -61,19 +63,26 @@ type scalerRunner struct {
 	// lsm guards access to latestScale
 	lsm         sync.Mutex
 	latestScale int32
+	hasData     bool
 }
 
-func (sr *scalerRunner) getLatestScale() int32 {
+func (sr *scalerRunner) getLatestScale() (int32, bool) {
 	sr.lsm.Lock()
 	defer sr.lsm.Unlock()
-	return sr.latestScale
+	return sr.latestScale, sr.hasData
 }
 
 func (sr *scalerRunner) updateLatestScale(new int32) bool {
 	sr.lsm.Lock()
 	defer sr.lsm.Unlock()
+	if new == noData {
+		sr.latestScale = 0
+		sr.hasData = false
+		return true
+	}
 	if sr.latestScale != new {
 		sr.latestScale = new
+		sr.hasData = true
 		return true
 	}
 	return false
@@ -110,20 +119,21 @@ func NewMultiScaler(dynConfig *DynamicConfig, stopCh <-chan struct{}, uniScalerF
 	}
 }
 
-func (m *MultiScaler) Get(ctx context.Context, key string) (*Metric, error) {
+func (m *MultiScaler) Get(ctx context.Context, key string) (*Metric, bool, error) {
 	m.scalersMutex.Lock()
 	defer m.scalersMutex.Unlock()
 	scaler, exists := m.scalers[key]
 	if !exists {
 		// This GroupResource is a lie, but unfortunately this interface requires one.
-		return nil, errors.NewNotFound(kpa.Resource("Metrics"), key)
+		return nil, false, errors.NewNotFound(kpa.Resource("Metrics"), key)
 	}
+	latestScale, ok := scaler.getLatestScale()
 	return &Metric{
-		DesiredScale: scaler.getLatestScale(),
-	}, nil
+		DesiredScale: latestScale,
+	}, ok, nil
 }
 
-func (m *MultiScaler) Create(ctx context.Context, kpa *kpa.PodAutoscaler) (*Metric, error) {
+func (m *MultiScaler) Create(ctx context.Context, kpa *kpa.PodAutoscaler) (*Metric, bool, error) {
 	m.scalersMutex.Lock()
 	defer m.scalersMutex.Unlock()
 	key := newKPAKey(kpa.Namespace, kpa.Name)
@@ -132,13 +142,14 @@ func (m *MultiScaler) Create(ctx context.Context, kpa *kpa.PodAutoscaler) (*Metr
 		var err error
 		scaler, err = m.createScaler(ctx, kpa)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		m.scalers[key] = scaler
 	}
+	latestScale, ok := scaler.getLatestScale()
 	return &Metric{
-		DesiredScale: scaler.getLatestScale(),
-	}, nil
+		DesiredScale: latestScale,
+	}, ok, nil
 }
 
 func (m *MultiScaler) Delete(ctx context.Context, key string) error {
@@ -165,7 +176,7 @@ func (m *MultiScaler) createScaler(ctx context.Context, kpa *kpa.PodAutoscaler) 
 	}
 
 	stopCh := make(chan struct{})
-	runner := &scalerRunner{scaler: scaler, latestScale: -1, stopCh: stopCh}
+	runner := &scalerRunner{scaler: scaler, stopCh: stopCh}
 
 	ticker := time.NewTicker(m.dynConfig.Current().TickInterval)
 
@@ -196,6 +207,7 @@ func (m *MultiScaler) createScaler(ctx context.Context, kpa *kpa.PodAutoscaler) 
 				return
 			case desiredScale := <-scaleChan:
 				if runner.updateLatestScale(desiredScale) {
+					m.logger.Debugf("DO NOT SUBMIT updating latest scale")
 					m.watcher(kpaKey)
 				}
 			}
@@ -223,6 +235,8 @@ func (m *MultiScaler) tickScaler(ctx context.Context, scaler UniScaler, scaleCha
 		}
 
 		scaleChan <- desiredScale
+	} else {
+		scaleChan <- noData
 	}
 }
 

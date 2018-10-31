@@ -137,7 +137,7 @@ func main() {
 
 	kpaScaler := autoscaling.NewKPAScaler(servingClientSet, scaleClient, logger, configMapWatcher)
 	ctl := autoscaling.NewController(&opt, kpaInformer, endpointsInformer, multiScaler, kpaScaler)
-	scraper := scraper.New(kpaInformer, podInformer)
+	scraper := scraper.New(podInformer)
 
 	// Start the serving informer factory.
 	kubeInformerFactory.Start(stopCh)

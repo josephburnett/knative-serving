@@ -17,24 +17,62 @@ limitations under the License.
 package scraper
 
 import (
-	informers "github.com/knative/serving/pkg/client/informers/externalversions/autoscaling/v1alpha1"
+	"context"
+	"sync"
+	"time"
+
+	"github.com/knative/serving/pkg/autoscaler"
 	_ "github.com/prometheus/prometheus/pkg/textparse"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 )
 
 type Scraper struct {
-	kpaInformer informers.PodAutoscalerInformer
+	sync.Mutex
 	podInformer corev1informers.PodInformer
+	targets     map[string]*target
 }
 
-func New(kpaInformer informers.PodAutoscalerInformer, podInformer corev1informers.PodInformer) *Scraper {
+type target struct {
+	selector *metav1.LabelSelector
+	record   func(context.Context, autoscaler.Stat)
+	stopCh   chan<- struct{}
+}
+
+func New(podInformer corev1informers.PodInformer) *Scraper {
 	return &Scraper{
-		kpaInformer: kpaInformer,
 		podInformer: podInformer,
+		targets:     make(map[string]*target),
 	}
 }
 
 func (s *Scraper) Run(stopCh <-chan struct{}) error {
-	<-stopCh
+	ticker := time.NewTicker(time.Second).T
+	for {
+		select {
+		case <-ticker:
+			if err := s.scrape(); err != nil {
+				return err
+			}
+		case <-stopCh:
+			break
+		}
+	}
 	return nil
+}
+
+func (s *Scraper) Add(kpa *autoscaling.PodAutoscaler, scaler *autoscaler.UniScaler, stopCh chan<- struct{}) error {
+	s.Lock()
+	defer s.Unlock()
+	targets[autoscaling.NewKpaKey(kpa.Namespace, kpa.Name)] = &target{
+		// TODO: deref kpa and get deployment selector
+		record: scaler.Record,
+		stopCh: stopCh,
+	}
+}
+
+func (s *Scraper) scrape() error {
+	// For each target set of labels:
+	// 1. list pods matching label selector
+	// 2. chose 5 pods at random
+	// 3. scrape pods and call record for each
 }

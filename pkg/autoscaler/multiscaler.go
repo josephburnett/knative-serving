@@ -25,6 +25,7 @@ import (
 	"github.com/knative/pkg/logging"
 	"github.com/knative/pkg/logging/logkey"
 	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
+	"github.com/knative/serving/pkg/autoscaler/scraper"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/errors"
 )
@@ -104,6 +105,8 @@ type MultiScaler struct {
 	logger *zap.SugaredLogger
 
 	watcher func(string)
+
+	scraper *scraper.Scraper
 }
 
 // NewMultiScaler constructs a MultiScaler.
@@ -175,12 +178,16 @@ func (m *MultiScaler) createScaler(ctx context.Context, kpa *kpa.PodAutoscaler) 
 	stopCh := make(chan struct{})
 	runner := &scalerRunner{scaler: scaler, latestScale: -1, stopCh: stopCh}
 
+	// Start collecting metrics from pods.
+	if err := m.scraper.Add(kpa, scaler, stopCh); err != nil {
+		return nil, err
+	}
+
 	ticker := time.NewTicker(m.dynConfig.Current().TickInterval)
 
 	scaleChan := make(chan int32, scaleBufferSize)
 
-	// TODO: Maybe start the Scraper here.
-
+	// Start calculating the desired scale.
 	go func() {
 		for {
 			select {
@@ -196,6 +203,7 @@ func (m *MultiScaler) createScaler(ctx context.Context, kpa *kpa.PodAutoscaler) 
 		}
 	}()
 
+	// Start reporting the desired scale through the KPAMetrics interface.
 	kpaKey := NewKpaKey(kpa.Namespace, kpa.Name)
 	go func() {
 		for {

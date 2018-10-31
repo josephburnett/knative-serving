@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/knative/pkg/logging"
-
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
 )
 
@@ -200,6 +199,10 @@ type Autoscaler struct {
 
 // New creates a new instance of autoscaler
 func New(dynamicConfig *DynamicConfig, containerConcurrency v1alpha1.RevisionContainerConcurrencyType, reporter StatsReporter) *Autoscaler {
+
+	// TODO: Pass in a PodLister (or something) so the Scraper can find pods.
+	//       Or pass in a Scraper.
+
 	return &Autoscaler{
 		DynamicConfig:                dynamicConfig,
 		containerConcurrency:         containerConcurrency,
@@ -209,6 +212,8 @@ func New(dynamicConfig *DynamicConfig, containerConcurrency v1alpha1.RevisionCon
 		scaleToZeroThresholdExceeded: false,
 	}
 }
+
+// TODO: Create a Scraper that finds pods, scrapes them and calls Record.
 
 // Record a data point.
 func (a *Autoscaler) Record(ctx context.Context, stat Stat) {

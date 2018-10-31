@@ -24,10 +24,9 @@ import (
 
 	"github.com/knative/pkg/logging"
 	"github.com/knative/pkg/logging/logkey"
+	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/errors"
-
-	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 )
 
 const (
@@ -57,6 +56,9 @@ type UniScalerFactory func(*kpa.PodAutoscaler, *DynamicConfig) (UniScaler, error
 // scalerRunner wraps a UniScaler and a channel for implementing shutdown behavior.
 type scalerRunner struct {
 	scaler UniScaler
+
+	// TODO: Or add a Scraper here that pushes into UniScaler.Record()
+
 	stopCh chan struct{}
 
 	// lsm guards access to latestScale
@@ -87,6 +89,9 @@ func NewKpaKey(namespace string, name string) string {
 }
 
 // MultiScaler maintains a collection of UniScalers.
+
+// TODO: Rename MultiScaler to Autoscaler or something.
+
 type MultiScaler struct {
 	scalers       map[string]*scalerRunner
 	scalersMutex  sync.RWMutex
@@ -173,6 +178,8 @@ func (m *MultiScaler) createScaler(ctx context.Context, kpa *kpa.PodAutoscaler) 
 	ticker := time.NewTicker(m.dynConfig.Current().TickInterval)
 
 	scaleChan := make(chan int32, scaleBufferSize)
+
+	// TODO: Maybe start the Scraper here.
 
 	go func() {
 		for {

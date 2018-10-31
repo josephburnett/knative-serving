@@ -17,14 +17,24 @@ limitations under the License.
 package scraper
 
 import (
+	informers "github.com/knative/serving/pkg/client/informers/externalversions/autoscaling/v1alpha1"
 	_ "github.com/prometheus/prometheus/pkg/textparse"
+	corev1informers "k8s.io/client-go/informers/core/v1"
 )
 
 type Scraper struct {
-	// TODO: Use a PodLister to find pods.
-	//       Or have a registry to keep a list.
+	kpaInformer informers.PodAutoscalerInformer
+	podInformer corev1informers.PodInformer
 }
 
-func New() *Scraper {
-	return &Scraper
+func New(kpaInformer informers.PodAutoscalerInformer, podInformer corev1informers.PodInformer) *Scraper {
+	return &Scraper{
+		kpaInformer: kpaInformer,
+		podInformer: podInformer,
+	}
+}
+
+func (s *Scraper) Run(stopCh <-chan struct{}) error {
+	<-stopCh
+	return nil
 }

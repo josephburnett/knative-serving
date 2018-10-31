@@ -27,6 +27,7 @@ import (
 	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/autoscaler"
+	"github.com/knative/serving/pkg/autoscaler/scraper"
 	"github.com/knative/serving/pkg/autoscaler/statserver"
 	clientset "github.com/knative/serving/pkg/client/clientset/versioned"
 	informers "github.com/knative/serving/pkg/client/informers/externalversions"
@@ -132,9 +133,11 @@ func main() {
 
 	kpaInformer := servingInformerFactory.Autoscaling().V1alpha1().PodAutoscalers()
 	endpointsInformer := kubeInformerFactory.Core().V1().Endpoints()
+	podInformer := kubeInformerFactory.Core().V1().Pods()
 
 	kpaScaler := autoscaling.NewKPAScaler(servingClientSet, scaleClient, logger, configMapWatcher)
 	ctl := autoscaling.NewController(&opt, kpaInformer, endpointsInformer, multiScaler, kpaScaler)
+	scraper := scraper.New(kpaInformer, podInformer)
 
 	// Start the serving informer factory.
 	kubeInformerFactory.Start(stopCh)
@@ -148,6 +151,7 @@ func main() {
 	for i, synced := range []cache.InformerSynced{
 		kpaInformer.Informer().HasSynced,
 		endpointsInformer.Informer().HasSynced,
+		podInformer.Informer().HasSynced,
 	} {
 		if ok := cache.WaitForCacheSync(stopCh, synced); !ok {
 			logger.Fatalf("failed to wait for cache at index %v to sync", i)
@@ -172,8 +176,13 @@ func main() {
 		http.ListenAndServe(":9090", nil)
 	}()
 
-	statsCh := make(chan *autoscaler.StatMessage, statsBufferLen)
+	// Start metrics inflow from pod scraping.
+	eg.Go(func() error {
+		return scraper.Run(stopCh)
+	})
 
+	// Start metrics inflow from queue-proxy push.
+	statsCh := make(chan *autoscaler.StatMessage, statsBufferLen)
 	statsServer := statserver.New(statsServerAddr, statsCh, logger)
 	eg.Go(func() error {
 		return statsServer.ListenAndServe()

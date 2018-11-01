@@ -25,6 +25,7 @@ import (
 
 	"github.com/knative/pkg/logging"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
+	"github.com/knative/serving/pkg/autoscaler/types"
 )
 
 const (
@@ -33,30 +34,11 @@ const (
 	ActivatorPodName string = "activator"
 )
 
-// Stat defines a single measurement at a point in time
-type Stat struct {
-	// The time the data point was collected on the pod.
-	Time *time.Time
-
-	// The unique identity of this pod.  Used to count how many pods
-	// are contributing to the metrics.
-	PodName string
-
-	// Average number of requests currently being handled by this pod.
-	AverageConcurrentRequests float64
-
-	// Number of requests received since last Stat (approximately QPS).
-	RequestCount int32
-
-	// Lameduck indicates this Pod has received a shutdown signal.
-	LameDuck bool
-}
-
 // StatMessage wraps a Stat with identifying information so it can be routed
 // to the correct receiver.
 type StatMessage struct {
 	Key  string
-	Stat Stat
+	Stat types.Stat
 }
 
 type statKey struct {
@@ -82,7 +64,7 @@ type totalAggregation struct {
 }
 
 // Aggregates a given stat to the correct pod-aggregation
-func (agg *totalAggregation) aggregate(stat Stat) {
+func (agg *totalAggregation) aggregate(stat types.Stat) {
 	current, exists := agg.perPodAggregations[stat.PodName]
 	if !exists {
 		current = &perPodAggregation{window: agg.window}
@@ -187,7 +169,7 @@ func (agg *perPodAggregation) usageRatio(now time.Time) float64 {
 type Autoscaler struct {
 	*DynamicConfig
 	containerConcurrency         v1alpha1.RevisionContainerConcurrencyType
-	stats                        map[statKey]Stat
+	stats                        map[statKey]types.Stat
 	statsMutex                   sync.Mutex
 	panicking                    bool
 	panicTime                    *time.Time
@@ -206,7 +188,7 @@ func New(dynamicConfig *DynamicConfig, containerConcurrency v1alpha1.RevisionCon
 	return &Autoscaler{
 		DynamicConfig:                dynamicConfig,
 		containerConcurrency:         containerConcurrency,
-		stats:                        make(map[statKey]Stat),
+		stats:                        make(map[statKey]types.Stat),
 		reporter:                     reporter,
 		lastRequestTime:              time.Now(),
 		scaleToZeroThresholdExceeded: false,
@@ -216,7 +198,7 @@ func New(dynamicConfig *DynamicConfig, containerConcurrency v1alpha1.RevisionCon
 // TODO: Create a Scraper that finds pods, scrapes them and calls Record.
 
 // Record a data point.
-func (a *Autoscaler) Record(ctx context.Context, stat Stat) {
+func (a *Autoscaler) Record(ctx context.Context, stat types.Stat) {
 	if stat.Time == nil {
 		logger := logging.FromContext(ctx)
 		logger.Errorf("Missing time from stat: %+v", stat)
@@ -247,7 +229,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	panicData := newTotalAggregation(config.PanicWindow)
 
 	// Last stat per Pod
-	lastStat := make(map[string]Stat)
+	lastStat := make(map[string]types.Stat)
 
 	// accumulate stats into their respective buckets
 	for key, stat := range a.stats {

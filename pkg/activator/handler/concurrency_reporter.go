@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/knative/serving/pkg/autoscaler"
+	"github.com/knative/serving/pkg/autoscaler/types"
 )
 
 // Channels is a structure for holding the channels for driving Stats.
@@ -62,7 +63,7 @@ func NewConcurrencyReporter(podName string, channels Channels) {
 					} else {
 						requestCount := incomingRequestsPerKey[key]
 
-						stat := autoscaler.Stat{
+						stat := types.Stat{
 							Time:                      &now,
 							PodName:                   podName,
 							AverageConcurrentRequests: float64(concurrency),

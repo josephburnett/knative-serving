@@ -35,6 +35,7 @@ import (
 	"github.com/knative/serving/cmd/util"
 	activatorutil "github.com/knative/serving/pkg/activator/util"
 	"github.com/knative/serving/pkg/autoscaler"
+	"github.com/knative/serving/pkg/autoscaler/types"
 	"github.com/knative/serving/pkg/http/h2c"
 	"github.com/knative/serving/pkg/logging"
 	"github.com/knative/serving/pkg/queue"
@@ -64,7 +65,7 @@ var (
 	servingRevisionKey    string
 	servingAutoscaler     string
 	servingAutoscalerPort string
-	statChan              = make(chan *autoscaler.Stat, statReportingQueueLength)
+	statChan              = make(chan *types.Stat, statReportingQueueLength)
 	reqChan               = make(chan queue.ReqEvent, requestCountingQueueLength)
 	statSink              *websocket.ManagedConnection
 	logger                *zap.SugaredLogger

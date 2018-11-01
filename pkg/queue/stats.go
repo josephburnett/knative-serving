@@ -19,7 +19,7 @@ package queue
 import (
 	"time"
 
-	"github.com/knative/serving/pkg/autoscaler"
+	"github.com/knative/serving/pkg/autoscaler/types"
 )
 
 // ReqEvent represents either an incoming or closed request.
@@ -46,7 +46,7 @@ type Channels struct {
 	// Ticks with every stat report request
 	ReportChan <-chan time.Time
 	// Stat reporting channel
-	StatChan chan *autoscaler.Stat
+	StatChan chan *types.Stat
 }
 
 // Stats is a structure for holding channels per pod.
@@ -110,7 +110,7 @@ func NewStats(podName string, channels Channels, startedAt time.Time) *Stats {
 					}
 				}
 
-				stat := &autoscaler.Stat{
+				stat := &types.Stat{
 					Time:                      &now,
 					PodName:                   s.podName,
 					AverageConcurrentRequests: avg,

@@ -21,8 +21,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/knative/serving/pkg/autoscaler"
+	autoscaling "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
+	"github.com/knative/serving/pkg/autoscaler/types"
 	_ "github.com/prometheus/prometheus/pkg/textparse"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 )
 
@@ -34,7 +36,7 @@ type Scraper struct {
 
 type target struct {
 	selector *metav1.LabelSelector
-	record   func(context.Context, autoscaler.Stat)
+	record   func(context.Context, types.Stat)
 	stopCh   chan<- struct{}
 }
 
@@ -46,7 +48,7 @@ func New(podInformer corev1informers.PodInformer) *Scraper {
 }
 
 func (s *Scraper) Run(stopCh <-chan struct{}) error {
-	ticker := time.NewTicker(time.Second).T
+	ticker := time.NewTicker(time.Second).C
 	for {
 		select {
 		case <-ticker:
@@ -60,14 +62,15 @@ func (s *Scraper) Run(stopCh <-chan struct{}) error {
 	return nil
 }
 
-func (s *Scraper) Add(kpa *autoscaling.PodAutoscaler, scaler *autoscaler.UniScaler, stopCh chan<- struct{}) error {
+func (s *Scraper) Add(kpa *autoscaling.PodAutoscaler, record func(context.Context, types.Stat), stopCh chan<- struct{}) error {
 	s.Lock()
 	defer s.Unlock()
-	targets[autoscaling.NewKpaKey(kpa.Namespace, kpa.Name)] = &target{
+	s.targets[kpa.Namespace+"/"+kpa.Name] = &target{
 		// TODO: deref kpa and get deployment selector
-		record: scaler.Record,
+		record: record,
 		stopCh: stopCh,
 	}
+	return nil
 }
 
 func (s *Scraper) scrape() error {
@@ -75,4 +78,5 @@ func (s *Scraper) scrape() error {
 	// 1. list pods matching label selector
 	// 2. chose 5 pods at random
 	// 3. scrape pods and call record for each
+	return nil
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/knative/pkg/logging/logkey"
 	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/autoscaler/scraper"
+	"github.com/knative/serving/pkg/autoscaler/types"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/errors"
 )
@@ -44,7 +45,7 @@ type Metric struct {
 // UniScaler records statistics for a particular KPA and proposes the scale for the KPA's target based on those statistics.
 type UniScaler interface {
 	// Record records the given statistics.
-	Record(context.Context, Stat)
+	Record(context.Context, types.Stat)
 
 	// Scale either proposes a number of replicas or skips proposing. The proposal is requested at the given time.
 	// The returned boolean is true if and only if a proposal was returned.
@@ -179,7 +180,7 @@ func (m *MultiScaler) createScaler(ctx context.Context, kpa *kpa.PodAutoscaler) 
 	runner := &scalerRunner{scaler: scaler, latestScale: -1, stopCh: stopCh}
 
 	// Start collecting metrics from pods.
-	if err := m.scraper.Add(kpa, scaler, stopCh); err != nil {
+	if err := m.scraper.Add(kpa, scaler.Record, stopCh); err != nil {
 		return nil, err
 	}
 
@@ -246,7 +247,7 @@ func (m *MultiScaler) tickScaler(ctx context.Context, scaler UniScaler, scaleCha
 
 // RecordStat records some statistics for the given KPA. kpaKey should have the
 // form namespace/name.
-func (m *MultiScaler) RecordStat(key string, stat Stat) {
+func (m *MultiScaler) RecordStat(key string, stat types.Stat) {
 	m.scalersMutex.RLock()
 	defer m.scalersMutex.RUnlock()
 

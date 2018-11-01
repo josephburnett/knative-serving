@@ -25,29 +25,48 @@ import (
 	"github.com/knative/serving/pkg/autoscaler/types"
 	_ "github.com/prometheus/prometheus/pkg/textparse"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	appsv1informers "k8s.io/client-go/informers/apps/v1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
+	appsv1listers "k8s.io/client-go/listers/apps/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 type Scraper struct {
 	sync.Mutex
-	podInformer corev1informers.PodInformer
-	targets     map[string]*target
+	deploymentLister appsv1listers.DeploymentLister
+	podInformer      corev1informers.PodInformer
+	targets          map[string]*target
 }
 
 type target struct {
-	selector *metav1.LabelSelector
-	record   func(context.Context, types.Stat)
-	stopCh   chan<- struct{}
+	selector  labels.Selector
+	record    func(context.Context, types.Stat)
+	endpoints map[string]*endpoint
+	stopCh    chan<- struct{}
 }
 
-func New(podInformer corev1informers.PodInformer) *Scraper {
+type endpoint struct {
+	ip   string
+	port int
+	path string
+}
+
+func New(deploymentInformer appsv1informers.DeploymentInformer, podInformer corev1informers.PodInformer) *Scraper {
 	return &Scraper{
-		podInformer: podInformer,
-		targets:     make(map[string]*target),
+		deploymentLister: deploymentInformer.Lister(),
+		podInformer:      podInformer,
+		targets:          make(map[string]*target),
 	}
 }
 
 func (s *Scraper) Run(stopCh <-chan struct{}) error {
+	s.podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    s.addPod,
+		UpdateFunc: s.updatePod,
+		DeleteFunc: s.deletePod,
+	})
+
 	ticker := time.NewTicker(time.Second).C
 	for {
 		select {
@@ -62,13 +81,59 @@ func (s *Scraper) Run(stopCh <-chan struct{}) error {
 	return nil
 }
 
+func (s *Scraper) addPod(obj interface{}) {
+	s.Lock()
+	defer s.Unlock()
+}
+
+func (s *Scraper) updatePod(oldObj, newObj interface{}) {
+	s.Lock()
+	defer s.Unlock()
+}
+
+func (s *Scraper) deletePod(obj interface{}) {
+	s.Lock()
+	defer s.Unlock()
+}
+
 func (s *Scraper) Add(kpa *autoscaling.PodAutoscaler, record func(context.Context, types.Stat), stopCh chan<- struct{}) error {
+
+	// Get the Deployment's label selectors.
+	// TODO: use the objectRef instead.
+	dep, err := s.deploymentLister.Deployments(kpa.Namespace).Get(kpa.Name)
+	if err != nil {
+		return err
+	}
+	selector, err := metav1.LabelSelectorAsSelector(dep.Spec.Selector)
+	if err != nil {
+		return err
+	}
+
+	// Create the initial list of endpoints.
+	pods, err := s.podInformer.Lister().List(selector)
+	if err != nil {
+		return err
+	}
+	endpoints := make(map[string]*endpoint)
+	for _, pod := range pods {
+		if pod.Status.PodIP == "" {
+			continue
+		}
+		endpoints[pod.Name] = &endpoint{
+			ip:   pod.Status.PodIP,
+			port: 8080,
+			path: "/metrics",
+		}
+	}
+
+	// Register the target.
 	s.Lock()
 	defer s.Unlock()
 	s.targets[kpa.Namespace+"/"+kpa.Name] = &target{
-		// TODO: deref kpa and get deployment selector
-		record: record,
-		stopCh: stopCh,
+		selector:  selector,
+		record:    record,
+		endpoints: endpoints,
+		stopCh:    stopCh,
 	}
 	return nil
 }

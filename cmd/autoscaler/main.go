@@ -133,11 +133,12 @@ func main() {
 
 	kpaInformer := servingInformerFactory.Autoscaling().V1alpha1().PodAutoscalers()
 	endpointsInformer := kubeInformerFactory.Core().V1().Endpoints()
+	deploymentInformer := kubeInformerFactory.Apps().V1().Deployments()
 	podInformer := kubeInformerFactory.Core().V1().Pods()
 
 	kpaScaler := autoscaling.NewKPAScaler(servingClientSet, scaleClient, logger, configMapWatcher)
 	ctl := autoscaling.NewController(&opt, kpaInformer, endpointsInformer, multiScaler, kpaScaler)
-	scraper := scraper.New(podInformer)
+	scraper := scraper.New(deploymentInformer, podInformer)
 
 	// Start the serving informer factory.
 	kubeInformerFactory.Start(stopCh)
@@ -151,6 +152,7 @@ func main() {
 	for i, synced := range []cache.InformerSynced{
 		kpaInformer.Informer().HasSynced,
 		endpointsInformer.Informer().HasSynced,
+		deploymentInformer.Informer().HasSynced,
 		podInformer.Informer().HasSynced,
 	} {
 		if ok := cache.WaitForCacheSync(stopCh, synced); !ok {

@@ -18,12 +18,14 @@ package scraper
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	autoscaling "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/autoscaler/types"
 	_ "github.com/prometheus/prometheus/pkg/textparse"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	appsv1informers "k8s.io/client-go/informers/apps/v1"
@@ -82,18 +84,33 @@ func (s *Scraper) Run(stopCh <-chan struct{}) error {
 }
 
 func (s *Scraper) addPod(obj interface{}) {
+	yoloPod := obj.(*corev1.Pod)
 	s.Lock()
 	defer s.Unlock()
+	for _, target := range s.targets {
+		if target.selector.Matches(labels.Set(yoloPod.Labels)) {
+			if endpoint, ok := endpointFromPod(yoloPod); ok {
+				target.endpoints[yoloPod.Name] = endpoint
+			}
+		}
+	}
 }
 
 func (s *Scraper) updatePod(oldObj, newObj interface{}) {
-	s.Lock()
-	defer s.Unlock()
+	s.addPod(newObj)
 }
 
 func (s *Scraper) deletePod(obj interface{}) {
+	yoloPod := obj.(*corev1.Pod)
 	s.Lock()
 	defer s.Unlock()
+	for _, target := range s.targets {
+		if target.selector.Matches(labels.Set(yoloPod.Labels)) {
+			if _, ok := target.endpoints[yoloPod.Name]; ok {
+				delete(target.endpoints, yoloPod.Name)
+			}
+		}
+	}
 }
 
 func (s *Scraper) Add(kpa *autoscaling.PodAutoscaler, record func(context.Context, types.Stat), stopCh chan<- struct{}) error {
@@ -116,13 +133,8 @@ func (s *Scraper) Add(kpa *autoscaling.PodAutoscaler, record func(context.Contex
 	}
 	endpoints := make(map[string]*endpoint)
 	for _, pod := range pods {
-		if pod.Status.PodIP == "" {
-			continue
-		}
-		endpoints[pod.Name] = &endpoint{
-			ip:   pod.Status.PodIP,
-			port: 8080,
-			path: "/metrics",
+		if endpoint, ok := endpointFromPod(pod); ok {
+			endpoints[pod.Name] = endpoint
 		}
 	}
 
@@ -139,9 +151,23 @@ func (s *Scraper) Add(kpa *autoscaling.PodAutoscaler, record func(context.Contex
 }
 
 func (s *Scraper) scrape() error {
+	for key, target := range s.targets {
+		fmt.Printf("endpoints for %v: %v\n", key, target.endpoints)
+	}
 	// For each target set of labels:
 	// 1. list pods matching label selector
 	// 2. chose 5 pods at random
 	// 3. scrape pods and call record for each
 	return nil
+}
+
+func endpointFromPod(pod *corev1.Pod) (*endpoint, bool) {
+	if pod.Status.PodIP == "" {
+		return nil, false
+	}
+	return &endpoint{
+		ip:   pod.Status.PodIP,
+		port: 8080,
+		path: "/metrics",
+	}, true
 }

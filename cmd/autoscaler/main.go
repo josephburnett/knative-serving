@@ -78,23 +78,21 @@ func main() {
 	logger, atomicLevel := logging.NewLoggerFromConfig(loggingConfig, logLevelKey)
 	defer logger.Sync()
 
-	// set up signals so we handle the first shutdown signal gracefully
+	// Set up signals so we handle the first shutdown signal gracefully.
 	stopCh := signals.SetupSignalHandler()
+
+	// Construct clients.
+
+	logger.Infof("DO NOT SUBMIT: masterURL: %q", *masterURL)
 
 	cfg, err := clientcmd.BuildConfigFromFlags(*masterURL, *kubeconfig)
 	if err != nil {
 		logger.Fatal("Error building kubeconfig.", zap.Error(err))
 	}
-
 	kubeClientSet, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		logger.Fatal("Error building kubernetes clientset.", zap.Error(err))
 	}
-
-	// Watch the logging config map and dynamically update logging levels.
-	configMapWatcher := configmap.NewInformedWatcher(kubeClientSet, system.Namespace)
-	configMapWatcher.Watch(logging.ConfigName, logging.UpdateLevelFromConfigMap(logger, atomicLevel, logLevelKey))
-
 	// This is based on how Kubernetes sets up its scale client based on discovery:
 	// https://github.com/kubernetes/kubernetes/blob/94c2c6c84/cmd/kube-controller-manager/app/autoscaling.go#L75-L81
 	restMapper := buildRESTMapper(kubeClientSet, stopCh)
@@ -103,12 +101,14 @@ func main() {
 	if err != nil {
 		logger.Fatal("Error building scale clientset.", zap.Error(err))
 	}
-
 	servingClientSet, err := clientset.NewForConfig(cfg)
 	if err != nil {
 		logger.Fatal("Error building serving clientset.", zap.Error(err))
 	}
 
+	// Watch the logging config map and dynamically update logging levels.
+	configMapWatcher := configmap.NewInformedWatcher(kubeClientSet, system.Namespace)
+	configMapWatcher.Watch(logging.ConfigName, logging.UpdateLevelFromConfigMap(logger, atomicLevel, logLevelKey))
 	rawConfig, err := configmap.Load("/etc/config-autoscaler")
 	if err != nil {
 		logger.Fatalf("Error reading autoscaler configuration: %v", err)
@@ -120,27 +120,15 @@ func main() {
 	// Watch the autoscaler config map and dynamically update autoscaler config.
 	configMapWatcher.Watch(autoscaler.ConfigName, dynConfig.Update)
 
-	multiScaler := autoscaler.NewMultiScaler(dynConfig, stopCh, uniScalerFactory, logger)
-
-	opt := reconciler.Options{
-		KubeClientSet:    kubeClientSet,
-		ServingClientSet: servingClientSet,
-		Logger:           logger,
-	}
-
+	// Construct informers.
 	servingInformerFactory := informers.NewSharedInformerFactory(servingClientSet, time.Second*30)
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClientSet, time.Second*30)
-
 	kpaInformer := servingInformerFactory.Autoscaling().V1alpha1().PodAutoscalers()
 	endpointsInformer := kubeInformerFactory.Core().V1().Endpoints()
 	deploymentInformer := kubeInformerFactory.Apps().V1().Deployments()
 	podInformer := kubeInformerFactory.Core().V1().Pods()
 
-	kpaScaler := autoscaling.NewKPAScaler(servingClientSet, scaleClient, logger, configMapWatcher)
-	ctl := autoscaling.NewController(&opt, kpaInformer, endpointsInformer, multiScaler, kpaScaler)
-	scraper := scraper.New(deploymentInformer, podInformer)
-
-	// Start the serving informer factory.
+	// Start the informer factories.
 	kubeInformerFactory.Start(stopCh)
 	servingInformerFactory.Start(stopCh)
 	if err := configMapWatcher.Start(stopCh); err != nil {
@@ -161,11 +149,47 @@ func main() {
 	}
 
 	var eg errgroup.Group
+
+	logger.Info("DO NOT SUBMIT -- MARK")
+
+	// Metrics pipeline #1: direct push from queue-proxy to autoscaler.
+	statsCh := make(chan *autoscaler.StatMessage, statsBufferLen)
+	statsServer := statserver.New(statsServerAddr, statsCh, logger)
+
+	// Metrics pipeline #2: autoscaler scrape of queue-proxy prometheus endpoint.
+	scraper := scraper.New(deploymentInformer, podInformer)
+
+	// Autoscaling controller.
+	multiScaler := autoscaler.NewMultiScaler(dynConfig, stopCh, uniScalerFactory, logger, scraper)
+	kpaScaler := autoscaling.NewKPAScaler(servingClientSet, scaleClient, logger, configMapWatcher)
+	opt := reconciler.Options{
+		KubeClientSet:    kubeClientSet,
+		ServingClientSet: servingClientSet,
+		Logger:           logger,
+	}
+	ctl := autoscaling.NewController(&opt, kpaInformer, endpointsInformer, multiScaler, kpaScaler)
 	eg.Go(func() error {
 		return ctl.Run(controllerThreads, stopCh)
 	})
 
-	// Setup the metrics to flow to Prometheus.
+	// Start the metrics pipelines.
+	eg.Go(func() error {
+		return statsServer.ListenAndServe()
+	})
+	go func() {
+		for {
+			sm, ok := <-statsCh
+			if !ok {
+				break
+			}
+			multiScaler.RecordStat(sm.Key, sm.Stat)
+		}
+	}()
+	eg.Go(func() error {
+		return scraper.Run(stopCh)
+	})
+
+	// Setup the autoscaler controller metrics endpoint.
 	logger.Info("Initializing OpenCensus Prometheus exporter.")
 	promExporter, err := prometheus.NewExporter(prometheus.Options{Namespace: "autoscaler"})
 	if err != nil {
@@ -178,42 +202,18 @@ func main() {
 		http.ListenAndServe(":9090", nil)
 	}()
 
-	// Start metrics inflow from pod scraping.
-	eg.Go(func() error {
-		return scraper.Run(stopCh)
-	})
-
-	// Start metrics inflow from queue-proxy push.
-	statsCh := make(chan *autoscaler.StatMessage, statsBufferLen)
-	statsServer := statserver.New(statsServerAddr, statsCh, logger)
-	eg.Go(func() error {
-		return statsServer.ListenAndServe()
-	})
-
-	go func() {
-		for {
-			sm, ok := <-statsCh
-			if !ok {
-				break
-			}
-			multiScaler.RecordStat(sm.Key, sm.Stat)
-		}
-	}()
-
+	// Wait for all processes to complete.
 	egCh := make(chan struct{})
-
 	go func() {
 		if err := eg.Wait(); err != nil {
 			logger.Error("Group error.", zap.Error(err))
 		}
 		close(egCh)
 	}()
-
 	select {
 	case <-egCh:
 	case <-stopCh:
 	}
-
 	statsServer.Shutdown(time.Second * 5)
 }
 

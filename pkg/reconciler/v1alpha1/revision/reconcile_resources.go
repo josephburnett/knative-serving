@@ -19,6 +19,7 @@ package revision
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -91,15 +92,17 @@ func (c *Reconciler) reconcileDeployment(ctx context.Context, rev *v1alpha1.Revi
 }
 
 func (c *Reconciler) reconcileKPA(ctx context.Context, rev *v1alpha1.Revision) error {
+	logger := logging.FromContext(ctx)
+
+	desiredKpa := resources.MakeKPA(rev)
 	ns := rev.Namespace
 	kpaName := resourcenames.KPA(rev)
-	logger := logging.FromContext(ctx)
 
 	kpa, getKPAErr := c.kpaLister.PodAutoscalers(ns).Get(kpaName)
 	if apierrs.IsNotFound(getKPAErr) {
 		// KPA does not exist. Create it.
 		var err error
-		kpa, err = c.createKPA(ctx, rev)
+		kpa, err = c.createKPA(ctx, desiredKpa)
 		if err != nil {
 			logger.Errorf("Error creating KPA %q: %v", kpaName, err)
 			return err
@@ -108,6 +111,24 @@ func (c *Reconciler) reconcileKPA(ctx context.Context, rev *v1alpha1.Revision) e
 	} else if getKPAErr != nil {
 		logger.Errorf("Error reconciling kpa %q: %v", kpaName, getKPAErr)
 		return getKPAErr
+	} else {
+		kpaClone := kpa.DeepCopy()
+		diff := false
+		if !reflect.DeepEqual(desiredKpa.Spec, kpaClone.Spec) {
+			kpaClone.Spec = desiredKpa.Spec
+			diff = true
+		}
+		if !reflect.DeepEqual(desiredKpa.ObjectMeta, kpaClone.ObjectMeta) {
+			kpaClone.ObjectMeta = desiredKpa.ObjectMeta
+			diff = true
+		}
+		if diff {
+			newKpa, err := c.updateKPA(ctx, kpaClone)
+			if err != nil {
+				return err
+			}
+			kpa = newKpa
+		}
 	}
 
 	// Reflect the KPA status in our own.

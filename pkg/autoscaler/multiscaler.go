@@ -176,6 +176,7 @@ func (m *MultiScaler) Update(ctx context.Context, metric *Metric) (*Metric, erro
 	if err != nil {
 		return nil, err
 	}
+	m.scalers[key] = scaler
 	scaler.Lock()
 	defer scaler.Unlock()
 	return scaler.metric.Copy(), nil

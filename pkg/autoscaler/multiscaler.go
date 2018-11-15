@@ -25,7 +25,6 @@ import (
 	"github.com/knative/pkg/logging"
 	"github.com/knative/pkg/logging/logkey"
 	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
-	"github.com/knative/serving/pkg/autoscaler"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,7 +50,15 @@ type MetricSpec struct {
 }
 
 type MetricStatus struct {
-	DesiredScale int32
+	LatestScale int32
+}
+
+func (m Metric) Copy() *Metric {
+	return &Metric{
+		ObjectMeta: m.ObjectMeta,
+		Spec:       m.Spec,
+		Status:     m.Status,
+	}
 }
 
 // UniScaler records statistics for a particular KPA and proposes the scale for the KPA's target based on those statistics.
@@ -65,7 +72,7 @@ type UniScaler interface {
 }
 
 // UniScalerFactory creates a UniScaler for a given KPA using the given dynamic configuration.
-type UniScalerFactory func(*kpa.PodAutoscaler, *DynamicConfig) (UniScaler, error)
+type UniScalerFactory func(*Metric, *DynamicConfig) (UniScaler, error)
 
 // scalerRunner wraps a UniScaler and a channel for implementing shutdown behavior.
 type scalerRunner struct {
@@ -126,7 +133,7 @@ func NewMultiScaler(dynConfig *DynamicConfig, stopCh <-chan struct{}, uniScalerF
 	}
 }
 
-func (m *MultiScaler) Get(ctx context.Context, key string) (Metric, error) {
+func (m *MultiScaler) Get(ctx context.Context, key string) (*Metric, error) {
 	m.scalersMutex.RLock()
 	defer m.scalersMutex.RUnlock()
 	scaler, exists := m.scalers[key]
@@ -137,17 +144,17 @@ func (m *MultiScaler) Get(ctx context.Context, key string) (Metric, error) {
 	// Lock the UniScaler
 	scaler.RLock()
 	defer scaler.RUnlock()
-	return scaler.metric, nil
+	return scaler.metric.Copy(), nil
 }
 
-func (m *MultiScaler) Create(ctx context.Context, metric Metric) (Metric, error) {
+func (m *MultiScaler) Create(ctx context.Context, metric *Metric) (*Metric, error) {
 	m.scalersMutex.Lock()
 	defer m.scalersMutex.Unlock()
 	key := NewMetricKey(metric.Namespace, metric.Name)
 	scaler, exists := m.scalers[key]
 	if !exists {
 		var err error
-		scaler, err = m.createScaler(ctx, &metric)
+		scaler, err = m.createScaler(ctx, metric)
 		if err != nil {
 			return nil, err
 		}
@@ -155,7 +162,23 @@ func (m *MultiScaler) Create(ctx context.Context, metric Metric) (Metric, error)
 	}
 	scaler.RLock()
 	defer scaler.RUnlock()
-	return scaler.metric, nil
+	return scaler.metric.Copy(), nil
+}
+
+func (m *MultiScaler) Update(ctx context.Context, metric *Metric) (*Metric, error) {
+	m.scalersMutex.Lock()
+	defer m.scalersMutex.Unlock()
+	key := NewMetricKey(metric.Namespace, metric.Name)
+	if scaler, exists := m.scalers[key]; exists {
+		close(scaler.stopCh)
+	}
+	scaler, err := m.createScaler(ctx, metric)
+	if err != nil {
+		return nil, err
+	}
+	scaler.Lock()
+	defer scaler.Unlock()
+	return scaler.metric.Copy(), nil
 }
 
 func (m *MultiScaler) Delete(ctx context.Context, key string) error {
@@ -175,14 +198,14 @@ func (m *MultiScaler) Watch(fn func(string)) {
 	m.watcher = fn
 }
 
-func (m *MultiScaler) createScaler(ctx context.Context, metric *autoscaler.Metric) (*scalerRunner, error) {
+func (m *MultiScaler) createScaler(ctx context.Context, metric *Metric) (*scalerRunner, error) {
 	scaler, err := m.uniScalerFactory(metric, m.dynConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	stopCh := make(chan struct{})
-	runner := &scalerRunner{scaler: scaler, stopCh: stopCh, metric: metric}
+	runner := &scalerRunner{scaler: scaler, stopCh: stopCh, metric: *metric}
 
 	ticker := time.NewTicker(m.dynConfig.Current().TickInterval)
 
@@ -203,7 +226,7 @@ func (m *MultiScaler) createScaler(ctx context.Context, metric *autoscaler.Metri
 		}
 	}()
 
-	kpaKey := NewKpaKey(kpa.Namespace, kpa.Name)
+	metricKey := NewMetricKey(metric.Namespace, metric.Name)
 	go func() {
 		for {
 			select {
@@ -213,7 +236,7 @@ func (m *MultiScaler) createScaler(ctx context.Context, metric *autoscaler.Metri
 				return
 			case desiredScale := <-scaleChan:
 				if runner.updateLatestScale(desiredScale) {
-					m.watcher(kpaKey)
+					m.watcher(metricKey)
 				}
 			}
 		}

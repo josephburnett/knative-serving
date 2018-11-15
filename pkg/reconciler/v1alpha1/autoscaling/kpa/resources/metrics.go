@@ -21,9 +21,10 @@ import (
 	"github.com/knative/serving/pkg/autoscaler"
 )
 
-func MakeMetric(pa *pav1alpha1.PodAutoscaler) *autoscaler.Metric {
+func CreateMetric(pa *pav1alpha1.PodAutoscaler) *autoscaler.Metric {
 	return &autoscaler.Metric{
-		Spec: &autoscaler.MetricSpec{
+		ObjectMeta: pa.ObjectMeta,
+		Spec: autoscaler.MetricSpec{
 			TargetConcurrency: 1,
 		},
 	}

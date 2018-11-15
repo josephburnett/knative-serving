@@ -33,9 +33,9 @@ import (
 
 	"github.com/knative/pkg/logging/logkey"
 	"github.com/knative/serving/cmd/util"
-	kbufferutil "github.com/knative/serving/pkg/kbuffer/util"
 	"github.com/knative/serving/pkg/autoscaler"
 	"github.com/knative/serving/pkg/http/h2c"
+	kbufferutil "github.com/knative/serving/pkg/kbuffer/util"
 	"github.com/knative/serving/pkg/logging"
 	"github.com/knative/serving/pkg/queue"
 	"github.com/knative/serving/pkg/system"
@@ -86,7 +86,7 @@ func initEnv() {
 	containerConcurrency = util.MustParseIntEnvOrFatal("CONTAINER_CONCURRENCY", logger)
 
 	// TODO(mattmoor): Move this key to be in terms of the KPA.
-	servingRevisionKey = autoscaler.NewKpaKey(servingNamespace, servingRevision)
+	servingRevisionKey = autoscaler.NewMetricKey(servingNamespace, servingRevision)
 }
 
 func statReporter() {

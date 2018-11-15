@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/knative/pkg/logging"
-
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
 )
 
@@ -187,6 +186,7 @@ func (agg *perPodAggregation) usageRatio(now time.Time) float64 {
 // Autoscaler stores current state of an instance of an autoscaler
 type Autoscaler struct {
 	*DynamicConfig
+	// TODO: remove references to v1alpha1 types.
 	containerConcurrency v1alpha1.RevisionContainerConcurrencyType
 	stats                map[statKey]Stat
 	statsMutex           sync.Mutex
@@ -197,10 +197,10 @@ type Autoscaler struct {
 }
 
 // New creates a new instance of autoscaler
-func New(dynamicConfig *DynamicConfig, containerConcurrency v1alpha1.RevisionContainerConcurrencyType, reporter StatsReporter) *Autoscaler {
+func New(dynamicConfig *DynamicConfig, targetConcurrency int32, reporter StatsReporter) *Autoscaler {
 	return &Autoscaler{
 		DynamicConfig:        dynamicConfig,
-		containerConcurrency: containerConcurrency,
+		containerConcurrency: v1alpha1.RevisionContainerConcurrencyType(targetConcurrency),
 		stats:                make(map[statKey]Stat),
 		reporter:             reporter,
 	}

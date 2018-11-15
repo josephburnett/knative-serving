@@ -16,8 +16,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/knative/serving/pkg/kbuffer"
 	"github.com/knative/serving/pkg/autoscaler"
+	"github.com/knative/serving/pkg/kbuffer"
 )
 
 // ReqEvent represents an incoming/finished request with a given key
@@ -57,7 +57,7 @@ func (h *RequestEventHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	namespace := r.Header.Get(kbuffer.RevisionHeaderNamespace)
 	name := r.Header.Get(kbuffer.RevisionHeaderName)
 
-	revisionKey := autoscaler.NewKpaKey(namespace, name)
+	revisionKey := autoscaler.NewMetricKey(namespace, name)
 
 	h.ReqChan <- ReqEvent{Key: revisionKey, EventType: ReqIn}
 	defer func() { h.ReqChan <- ReqEvent{Key: revisionKey, EventType: ReqOut} }()

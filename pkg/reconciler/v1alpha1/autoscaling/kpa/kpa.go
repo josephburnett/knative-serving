@@ -30,6 +30,7 @@ import (
 	informers "github.com/knative/serving/pkg/client/informers/externalversions/autoscaling/v1alpha1"
 	listers "github.com/knative/serving/pkg/client/listers/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/reconciler"
+	"github.com/knative/serving/pkg/reconciler/v1alpha1/autoscaling/kpa/resources"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -50,7 +51,10 @@ type KPAMetrics interface {
 	Get(ctx context.Context, key string) (*autoscaler.Metric, error)
 
 	// Create adds a Metric resource for a given key, returning any errors.
-	Create(ctx context.Context, pa *pav1alpha1.PodAutoscaler) (*autoscaler.Metric, error)
+	Create(ctx context.Context, metric *autoscaler.Metric) (*autoscaler.Metric, error)
+
+	// Update updates a Metric resource, returning any errors.
+	Update(ctx context.Context, metric *autoscaler.Metric) (*autoscaler.Metric, error)
 
 	// Delete removes the Metric resource for a given key, returning any errors.
 	Delete(ctx context.Context, key string) error
@@ -181,9 +185,10 @@ func (c *Reconciler) reconcile(ctx context.Context, key string, pa *pav1alpha1.P
 	pa.Status.InitializeConditions()
 	logger.Debug("PA exists")
 
+	desiredMetric := resources.CreateMetric(pa)
 	metric, err := c.kpaMetrics.Get(ctx, key)
 	if errors.IsNotFound(err) {
-		metric, err = c.kpaMetrics.Create(ctx, pa)
+		metric, err = c.kpaMetrics.Create(ctx, desiredMetric)
 		if err != nil {
 			logger.Errorf("Error creating Metric: %v", err)
 			return err
@@ -191,11 +196,22 @@ func (c *Reconciler) reconcile(ctx context.Context, key string, pa *pav1alpha1.P
 	} else if err != nil {
 		logger.Errorf("Error fetching Metric: %v", err)
 		return err
+	} else {
+		// Ignore Status when reconciling.
+		desiredMetric.Status = metric.Status
+		if !reflect.DeepEqual(desiredMetric, metric) {
+			newMetric, err := c.kpaMetrics.Update(ctx, desiredMetric)
+			if err != nil {
+				logger.Errorf("Error when updating Metric: %v", err)
+				return err
+			}
+			metric = newMetric
+		}
 	}
 
 	// Get the appropriate current scale from the metric, and right size
 	// the scaleTargetRef based on it.
-	want, err := c.kpaScaler.Scale(ctx, pa, metric.DesiredScale)
+	want, err := c.kpaScaler.Scale(ctx, pa, metric.Status.LatestScale)
 	if err != nil {
 		logger.Errorf("Error scaling target: %v", err)
 		return err

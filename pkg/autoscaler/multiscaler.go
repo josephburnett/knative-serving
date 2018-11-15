@@ -44,7 +44,7 @@ type Metric struct {
 }
 
 type MetricSpec struct {
-	TargetConcurrency int32
+	ContainerConcurrency int32
 	// TODO(#2203): scrape pods for metrics
 	Selector *metav1.LabelSelector
 }

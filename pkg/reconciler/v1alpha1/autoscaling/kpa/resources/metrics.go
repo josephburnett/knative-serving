@@ -25,7 +25,7 @@ func CreateMetric(pa *pav1alpha1.PodAutoscaler) *autoscaler.Metric {
 	return &autoscaler.Metric{
 		ObjectMeta: pa.ObjectMeta,
 		Spec: autoscaler.MetricSpec{
-			TargetConcurrency: 1,
+			ContainerConcurrency: 1,
 		},
 	}
 }

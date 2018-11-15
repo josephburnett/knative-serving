@@ -19,10 +19,12 @@ package main
 import (
 	"flag"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/knative/pkg/configmap"
 	"github.com/knative/pkg/signals"
+	"github.com/knative/serving/pkg/apis/autoscaling"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/autoscaler"
 	"github.com/knative/serving/pkg/autoscaler/statserver"
@@ -217,8 +219,12 @@ func uniScalerFactory(metric *autoscaler.Metric, dynamicConfig *autoscaler.Dynam
 	if err != nil {
 		return nil, err
 	}
-
-	return autoscaler.New(dynamicConfig, metric.Spec.TargetConcurrency, reporter), nil
+	targetAnnotation := int32(0)
+	if s, ok := metric.Annotations[autoscaling.TargetAnnotationKey]; ok {
+		i, _ := strconv.ParseInt(s, 10, 32)
+		targetAnnotation = int32(i)
+	}
+	return autoscaler.New(dynamicConfig, metric.Spec.ContainerConcurrency, targetAnnotation, reporter), nil
 }
 
 func labelValueOrEmpty(metric *autoscaler.Metric, labelKey string) string {

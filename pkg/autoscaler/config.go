@@ -53,11 +53,19 @@ type Config struct {
 
 // TargetConcurrency calculates the target concurrency for a given container-concurrency
 // taking the container-concurrency-target-percentage into account.
-func (c *Config) TargetConcurrency(concurrency v1alpha1.RevisionContainerConcurrencyType) float64 {
-	if concurrency == 0 {
-		return c.ContainerConcurrencyTargetDefault
+func (c *Config) TargetConcurrency(concurrency v1alpha1.RevisionContainerConcurrencyType, targetAnnotation int32) float64 {
+	// Prefer the lower target concurrency (higher pod count) between
+	// what is required for the Spec.ContainerConcurrency and the
+	// autoscaling.knative.dev/target annotation, defaulting to
+	// ContainerConcurrencyTargetDefault when neither are specified.
+	target := float64(concurrency) * c.ContainerConcurrencyTargetPercentage
+	if targetAnnotation != 0 && float64(targetAnnotation) < target {
+		target = float64(targetAnnotation)
 	}
-	return float64(concurrency) * c.ContainerConcurrencyTargetPercentage
+	if target == 0.0 {
+		target = c.ContainerConcurrencyTargetDefault
+	}
+	return target
 }
 
 // NewConfigFromMap creates a Config from the supplied map

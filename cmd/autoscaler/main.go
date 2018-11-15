@@ -23,7 +23,6 @@ import (
 
 	"github.com/knative/pkg/configmap"
 	"github.com/knative/pkg/signals"
-	pav1alpha1 "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/autoscaler"
 	"github.com/knative/serving/pkg/autoscaler/statserver"
@@ -211,10 +210,10 @@ func buildRESTMapper(kubeClientSet kubernetes.Interface, stopCh <-chan struct{})
 	return rm
 }
 
-func uniScalerFactory(pa *pav1alpha1.PodAutoscaler, dynamicConfig *autoscaler.DynamicConfig) (autoscaler.UniScaler, error) {
-	// Create a stats reporter which tags statistics by PA namespace, configuration name, and PA name.
-	reporter, err := autoscaler.NewStatsReporter(pa.Namespace,
-		labelValueOrEmpty(pa, serving.ServiceLabelKey), labelValueOrEmpty(pa, serving.ConfigurationLabelKey), pa.Name)
+func uniScalerFactory(metric *autoscaler.Metric, dynamicConfig *autoscaler.DynamicConfig) (autoscaler.UniScaler, error) {
+	// Create a stats reporter which tags statistics by Metric namespace, configuration name, and Metric name.
+	reporter, err := autoscaler.NewStatsReporter(metric.Namespace,
+		labelValueOrEmpty(metric, serving.ServiceLabelKey), labelValueOrEmpty(metric, serving.ConfigurationLabelKey), metric.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -222,9 +221,9 @@ func uniScalerFactory(pa *pav1alpha1.PodAutoscaler, dynamicConfig *autoscaler.Dy
 	return autoscaler.New(dynamicConfig, pa.Spec.ContainerConcurrency, reporter), nil
 }
 
-func labelValueOrEmpty(pa *pav1alpha1.PodAutoscaler, labelKey string) string {
-	if pa.Labels != nil {
-		if value, ok := pa.Labels[labelKey]; ok {
+func labelValueOrEmpty(metric *autoscaler.Metric, labelKey string) string {
+	if metric.Labels != nil {
+		if value, ok := metric.Labels[labelKey]; ok {
 			return value
 		}
 	}

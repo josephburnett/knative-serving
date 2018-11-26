@@ -90,7 +90,7 @@ func NewController(
 
 	paInformer informers.PodAutoscalerInformer,
 	endpointsInformer corev1informers.EndpointsInformer,
-	vpaInformer vpainformers.VerticalPodAutoscalersInformer,
+	vpaInformer vpainformers.VerticalPodAutoscalerInformer,
 
 	kpaMetrics KPAMetrics,
 	kpaScaler KPAScaler,

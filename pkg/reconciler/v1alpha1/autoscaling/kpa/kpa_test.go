@@ -37,6 +37,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	fakeVPA "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned/fake"
+	vpainformers "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/informers/externalversions"
 	kubeinformers "k8s.io/client-go/informers"
 	fakeK8s "k8s.io/client-go/kubernetes/fake"
 	scalefake "k8s.io/client-go/scale/fake"
@@ -69,6 +71,7 @@ func newConfigWatcher() configmap.Watcher {
 func TestControllerSynchronizesCreatesAndDeletes(t *testing.T) {
 	kubeClient := fakeK8s.NewSimpleClientset()
 	servingClient := fakeKna.NewSimpleClientset()
+	vpaClient := fakeVPA.NewSimpleClientset()
 
 	stopCh := make(chan struct{})
 	createdCh := make(chan struct{})
@@ -82,6 +85,7 @@ func TestControllerSynchronizesCreatesAndDeletes(t *testing.T) {
 
 	servingInformer := informers.NewSharedInformerFactory(servingClient, 0)
 	kubeInformer := kubeinformers.NewSharedInformerFactory(kubeClient, 0)
+	vpaInformer := vpainformers.NewSharedInformerFactory(vpaClient, 0)
 
 	scaleClient := &scalefake.FakeScaleClient{}
 	kpaScaler := NewKPAScaler(servingClient, scaleClient, TestLogger(t), newConfigWatcher())
@@ -90,6 +94,7 @@ func TestControllerSynchronizesCreatesAndDeletes(t *testing.T) {
 	ctl := NewController(&opts,
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
+		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
 		fakeMetrics,
 		kpaScaler,
 	)
@@ -156,6 +161,7 @@ func TestControllerSynchronizesCreatesAndDeletes(t *testing.T) {
 func TestNonKpaClass(t *testing.T) {
 	kubeClient := fakeK8s.NewSimpleClientset()
 	servingClient := fakeKna.NewSimpleClientset()
+	vpaClient := fakeVPA.NewSimpleClientset()
 
 	stopCh := make(chan struct{})
 	createdCh := make(chan struct{})
@@ -169,6 +175,7 @@ func TestNonKpaClass(t *testing.T) {
 
 	servingInformer := informers.NewSharedInformerFactory(servingClient, 0)
 	kubeInformer := kubeinformers.NewSharedInformerFactory(kubeClient, 0)
+	vpaInformer := vpainformers.NewSharedInformerFactory(vpaClient, 0)
 
 	scaleClient := &scalefake.FakeScaleClient{}
 	kpaScaler := NewKPAScaler(servingClient, scaleClient, TestLogger(t), newConfigWatcher())
@@ -177,6 +184,7 @@ func TestNonKpaClass(t *testing.T) {
 	ctl := NewController(&opts,
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
+		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
 		fakeMetrics,
 		kpaScaler,
 	)
@@ -216,6 +224,7 @@ func TestNonKpaClass(t *testing.T) {
 func TestNoEndpoints(t *testing.T) {
 	kubeClient := fakeK8s.NewSimpleClientset()
 	servingClient := fakeKna.NewSimpleClientset()
+	vpaClient := fakeVPA.NewSimpleClientset()
 
 	stopCh := make(chan struct{})
 	createdCh := make(chan struct{})
@@ -229,6 +238,7 @@ func TestNoEndpoints(t *testing.T) {
 
 	servingInformer := informers.NewSharedInformerFactory(servingClient, 0)
 	kubeInformer := kubeinformers.NewSharedInformerFactory(kubeClient, 0)
+	vpaInformer := vpainformers.NewSharedInformerFactory(vpaClient, 0)
 
 	scaleClient := &scalefake.FakeScaleClient{}
 	kpaScaler := NewKPAScaler(servingClient, scaleClient, TestLogger(t), newConfigWatcher())
@@ -237,6 +247,7 @@ func TestNoEndpoints(t *testing.T) {
 	ctl := NewController(&opts,
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
+		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
 		fakeMetrics,
 		kpaScaler,
 	)
@@ -277,6 +288,7 @@ func TestNoEndpoints(t *testing.T) {
 func TestEmptyEndpoints(t *testing.T) {
 	kubeClient := fakeK8s.NewSimpleClientset()
 	servingClient := fakeKna.NewSimpleClientset()
+	vpaClient := fakeVPA.NewSimpleClientset()
 
 	stopCh := make(chan struct{})
 	createdCh := make(chan struct{})
@@ -290,6 +302,7 @@ func TestEmptyEndpoints(t *testing.T) {
 
 	servingInformer := informers.NewSharedInformerFactory(servingClient, 0)
 	kubeInformer := kubeinformers.NewSharedInformerFactory(kubeClient, 0)
+	vpaInformer := vpainformers.NewSharedInformerFactory(vpaClient, 0)
 
 	scaleClient := &scalefake.FakeScaleClient{}
 	kpaScaler := NewKPAScaler(servingClient, scaleClient, TestLogger(t), newConfigWatcher())
@@ -298,6 +311,7 @@ func TestEmptyEndpoints(t *testing.T) {
 	ctl := NewController(&opts,
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
+		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
 		fakeMetrics,
 		kpaScaler,
 	)
@@ -338,6 +352,7 @@ func TestEmptyEndpoints(t *testing.T) {
 func TestControllerCreateError(t *testing.T) {
 	kubeClient := fakeK8s.NewSimpleClientset()
 	servingClient := fakeKna.NewSimpleClientset()
+	vpaClient := fakeVPA.NewSimpleClientset()
 
 	key := testNamespace + "/" + testRevision
 	want := errors.NewBadRequest("asdf")
@@ -350,12 +365,15 @@ func TestControllerCreateError(t *testing.T) {
 
 	servingInformer := informers.NewSharedInformerFactory(servingClient, 0)
 	kubeInformer := kubeinformers.NewSharedInformerFactory(kubeClient, 0)
+	vpaInformer := vpainformers.NewSharedInformerFactory(vpaClient, 0)
+
 	scaleClient := &scalefake.FakeScaleClient{}
 	kpaScaler := NewKPAScaler(servingClient, scaleClient, TestLogger(t), newConfigWatcher())
 
 	ctl := NewController(&opts,
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
+		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
 		&failingKPAMetrics{
 			getErr:    errors.NewNotFound(kpa.Resource("Metrics"), key),
 			createErr: want,
@@ -376,6 +394,7 @@ func TestControllerCreateError(t *testing.T) {
 func TestControllerUpdateError(t *testing.T) {
 	kubeClient := fakeK8s.NewSimpleClientset()
 	servingClient := fakeKna.NewSimpleClientset()
+	vpaClient := fakeVPA.NewSimpleClientset()
 
 	key := testNamespace + "/" + testRevision
 	want := errors.NewBadRequest("asdf")
@@ -388,12 +407,15 @@ func TestControllerUpdateError(t *testing.T) {
 
 	servingInformer := informers.NewSharedInformerFactory(servingClient, 0)
 	kubeInformer := kubeinformers.NewSharedInformerFactory(kubeClient, 0)
+	vpaInformer := vpainformers.NewSharedInformerFactory(vpaClient, 0)
+
 	scaleClient := &scalefake.FakeScaleClient{}
 	kpaScaler := NewKPAScaler(servingClient, scaleClient, TestLogger(t), newConfigWatcher())
 
 	ctl := NewController(&opts,
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
+		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
 		&failingKPAMetrics{
 			getErr:    errors.NewNotFound(kpa.Resource("Metrics"), key),
 			createErr: want,
@@ -414,6 +436,7 @@ func TestControllerUpdateError(t *testing.T) {
 func TestControllerGetError(t *testing.T) {
 	kubeClient := fakeK8s.NewSimpleClientset()
 	servingClient := fakeKna.NewSimpleClientset()
+	vpaClient := fakeVPA.NewSimpleClientset()
 
 	key := testNamespace + "/" + testRevision
 	want := errors.NewBadRequest("asdf")
@@ -426,12 +449,15 @@ func TestControllerGetError(t *testing.T) {
 
 	servingInformer := informers.NewSharedInformerFactory(servingClient, 0)
 	kubeInformer := kubeinformers.NewSharedInformerFactory(kubeClient, 0)
+	vpaInformer := vpainformers.NewSharedInformerFactory(vpaClient, 0)
+
 	scaleClient := &scalefake.FakeScaleClient{}
 	kpaScaler := NewKPAScaler(servingClient, scaleClient, TestLogger(t), newConfigWatcher())
 
 	ctl := NewController(&opts,
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
+		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
 		&failingKPAMetrics{
 			getErr: want,
 		},
@@ -451,6 +477,7 @@ func TestControllerGetError(t *testing.T) {
 func TestScaleFailure(t *testing.T) {
 	kubeClient := fakeK8s.NewSimpleClientset()
 	servingClient := fakeKna.NewSimpleClientset()
+	vpaClient := fakeVPA.NewSimpleClientset()
 
 	stopCh := make(chan struct{})
 	createdCh := make(chan struct{})
@@ -464,6 +491,7 @@ func TestScaleFailure(t *testing.T) {
 
 	servingInformer := informers.NewSharedInformerFactory(servingClient, 0)
 	kubeInformer := kubeinformers.NewSharedInformerFactory(kubeClient, 0)
+	vpaInformer := vpainformers.NewSharedInformerFactory(vpaClient, 0)
 
 	scaleClient := &scalefake.FakeScaleClient{}
 	kpaScaler := NewKPAScaler(servingClient, scaleClient, TestLogger(t), newConfigWatcher())
@@ -472,6 +500,7 @@ func TestScaleFailure(t *testing.T) {
 	ctl := NewController(&opts,
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
+		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
 		fakeMetrics,
 		kpaScaler,
 	)
@@ -498,6 +527,7 @@ func TestScaleFailure(t *testing.T) {
 func TestBadKey(t *testing.T) {
 	kubeClient := fakeK8s.NewSimpleClientset()
 	servingClient := fakeKna.NewSimpleClientset()
+	vpaClient := fakeVPA.NewSimpleClientset()
 
 	opts := reconciler.Options{
 		KubeClientSet:    kubeClient,
@@ -507,12 +537,15 @@ func TestBadKey(t *testing.T) {
 
 	servingInformer := informers.NewSharedInformerFactory(servingClient, 0)
 	kubeInformer := kubeinformers.NewSharedInformerFactory(kubeClient, 0)
+	vpaInformer := vpainformers.NewSharedInformerFactory(vpaClient, 0)
+
 	scaleClient := &scalefake.FakeScaleClient{}
 	kpaScaler := NewKPAScaler(servingClient, scaleClient, TestLogger(t), newConfigWatcher())
 
 	ctl := NewController(&opts,
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
+		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
 		&failingKPAMetrics{},
 		kpaScaler,
 	)

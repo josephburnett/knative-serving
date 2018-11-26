@@ -19,52 +19,55 @@ package resources
 import (
 	"github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/reconciler/v1alpha1/revision/resources"
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1beta1"
 )
 
 func MakeVPA(pa *v1alpha1.PodAutoscaler) *v1beta1.VerticalPodAutoscaler {
+	updateMode := v1beta1.UpdateModeAuto
+	scalingMode := v1beta1.ContainerScalingModeAuto
 	return &v1beta1.VerticalPodAutoscaler{
 		ObjectMeta: pa.ObjectMeta,
 		Spec: v1beta1.VerticalPodAutoscalerSpec{
 			Selector: &metav1.LabelSelector{
 				MatchLabels: pa.Labels,
 			},
-			UpdatePolicy: &v1beta1.UpdatePolicy{
-				UpdateMode: v1beta1.UpdateModeAuto,
+			UpdatePolicy: &v1beta1.PodUpdatePolicy{
+				UpdateMode: &updateMode,
 			},
 			ResourcePolicy: &v1beta1.PodResourcePolicy{
 				ContainerPolicies: []v1beta1.ContainerResourcePolicy{
 					{
 						ContainerName: resources.UserContainerName,
-						Mode:          v1beta1.ContainerScalingModeAuto,
-						MaxAllowed: v1.ResourceList{
-							v1.ResourceCPU:    resources.UserContainerMaxCPU,
-							v1.ResourceMemory: resources.UserContainerMaxMemroy,
+						Mode:          &scalingMode,
+						MaxAllowed: corev1.ResourceList{
+							corev1.ResourceCPU:    resources.UserContainerMaxCPU,
+							corev1.ResourceMemory: resources.UserContainerMaxMemory,
 						},
 					},
 					{
 						ContainerName: resources.FluentdContainerName,
-						Mode:          v1beta1.ContainerScalingModeAuto,
-						MaxAllowed: v1.ResourceList{
-							v1.ResourceCPU:    resources.FluentdContainerMaxCPU,
-							v1.ResourceMemory: resources.FluentdContainerMaxMemory,
+						Mode:          &scalingMode,
+						MaxAllowed: corev1.ResourceList{
+							corev1.ResourceCPU:    resources.FluentdContainerMaxCPU,
+							corev1.ResourceMemory: resources.FluentdContainerMaxMemory,
 						},
 					},
 					{
 						ContainerName: resources.EnvoyContainerName,
-						Mode:          v1beta1.ContainerScalingModeAuto,
-						MaxAllowed: v1.ResourceList{
-							v1.ResourceCPU:    resources.EnvoyContainerMaxCPU,
-							v1.ResourceMemory: resources.EnvoyContainerMaxMemory,
+						Mode:          &scalingMode,
+						MaxAllowed: corev1.ResourceList{
+							corev1.ResourceCPU:    resources.EnvoyContainerMaxCPU,
+							corev1.ResourceMemory: resources.EnvoyContainerMaxMemory,
 						},
 					},
 					{
 						ContainerName: resources.QueueContainerName,
-						Mode:          v1beta1.ContainerScalingModeAuto,
-						MaxAllowed: v1.ResourceList{
-							v1.ResourceCPU:    resources.QueueContainerMaxCPU,
-							v1.ResourceMemory: resources.QueueContainerMaxMemory,
+						Mode:          &scalingMode,
+						MaxAllowed: corev1.ResourceList{
+							corev1.ResourceCPU:    resources.QueueContainerMaxCPU,
+							corev1.ResourceMemory: resources.QueueContainerMaxMemory,
 						},
 					},
 				},

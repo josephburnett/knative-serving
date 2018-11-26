@@ -524,10 +524,18 @@ func TestBadKey(t *testing.T) {
 }
 
 func newTestKPAMetrics(createdCh chan struct{}, stopCh chan struct{}) *testKPAMetrics {
-	return &testKPAMetrics{atomic.NewUint32(0), atomic.NewUint32(0), atomic.NewBool(false), createdCh, stopCh}
+	return &testKPAMetrics{
+		metrics:            make(map[string]*autoscaler.Metric),
+		createCallCount:    atomic.NewUint32(0),
+		deleteCallCount:    atomic.NewUint32(0),
+		deleteBeforeCreate: atomic.NewBool(false),
+		createdCh:          createdCh,
+		stopCh:             stopCh,
+	}
 }
 
 type testKPAMetrics struct {
+	metrics            map[string]*autoscaler.Metric
 	createCallCount    *atomic.Uint32
 	deleteCallCount    *atomic.Uint32
 	deleteBeforeCreate *atomic.Bool
@@ -536,13 +544,19 @@ type testKPAMetrics struct {
 }
 
 func (km *testKPAMetrics) Get(ctx context.Context, key string) (*autoscaler.Metric, error) {
-	return nil, errors.NewNotFound(kpa.Resource("Metrics"), key)
+	if metric, ok := km.metrics[key]; ok {
+		return metric, nil
+	} else {
+		return nil, errors.NewNotFound(kpa.Resource("Metrics"), key)
+	}
 }
 
 func (km *testKPAMetrics) Create(ctx context.Context, kpa *kpa.PodAutoscaler) (*autoscaler.Metric, error) {
 	km.createCallCount.Add(1)
 	km.createdCh <- struct{}{}
-	return &autoscaler.Metric{1}, nil
+	metric := &autoscaler.Metric{1}
+	km.metrics[kpa.Namespace+"/"+kpa.Name] = metric
+	return metric, nil
 }
 
 func (km *testKPAMetrics) Delete(ctx context.Context, key string) error {
@@ -555,6 +569,7 @@ func (km *testKPAMetrics) Delete(ctx context.Context, key string) error {
 	} else {
 		km.deleteBeforeCreate.Store(true)
 	}
+	delete(km.metrics, key)
 	return nil
 }
 

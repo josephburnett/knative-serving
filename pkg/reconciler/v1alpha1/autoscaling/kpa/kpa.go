@@ -30,7 +30,6 @@ import (
 	informers "github.com/knative/serving/pkg/client/informers/externalversions/autoscaling/v1alpha1"
 	listers "github.com/knative/serving/pkg/client/listers/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/reconciler"
-	"github.com/knative/serving/pkg/reconciler/v1alpha1/autoscaling/kpa/resources"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -207,9 +206,9 @@ func (c *Reconciler) reconcileKPA(ctx context.Context, key string, pa *pav1alpha
 		return err
 	}
 
-	metric, err := c.kpaMetrics.Get(ctx, key)
+	_, err = c.kpaMetrics.Get(ctx, key)
 	if errors.IsNotFound(err) {
-		metric, err = c.kpaMetrics.Create(ctx, pa)
+		_, err = c.kpaMetrics.Create(ctx, pa)
 		if err != nil {
 			logger.Errorf("Error creating Metric: %v", err)
 			return err
@@ -247,7 +246,7 @@ func (c *Reconciler) reconcileActiveCondition(ctx context.Context, key string, p
 
 	if pa.Status.RecommendedScale == nil {
 		// No scale recommendation. Nothing to check.
-		return
+		return nil
 	}
 	want := *pa.Status.RecommendedScale
 
@@ -282,7 +281,7 @@ func (c *Reconciler) reconcileActiveCondition(ctx context.Context, key string, p
 	}
 
 	reporter.Report(autoscaler.ActualPodCountM, float64(got))
-	reporter.Report(autoscaler.RequestedPodCountM, float64())
+	reporter.Report(autoscaler.RequestedPodCountM, float64(want))
 
 	switch {
 	case want == 0:
@@ -300,8 +299,8 @@ func (c *Reconciler) reconcileActiveCondition(ctx context.Context, key string, p
 }
 
 func (c *Reconciler) reconcileVPA(ctx context.Context, key string, pa *pav1alpha1.PodAutoscaler) error {
-	logger := logging.FromContext(ctx)
-	want := resources.MakeVPA(pa)
+	// logger := logging.FromContext(ctx)
+	// want := resources.MakeVPA(pa)
 	// TODO: reconcile the VPA
 	return nil
 }

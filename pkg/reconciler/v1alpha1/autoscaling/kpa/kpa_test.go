@@ -68,6 +68,8 @@ func newConfigWatcher() configmap.Watcher {
 		})
 }
 
+// TODO: convert KPA unit tests to table testing pattern.
+
 func TestControllerSynchronizesCreatesAndDeletes(t *testing.T) {
 	kubeClient := fakeK8s.NewSimpleClientset()
 	servingClient := fakeKna.NewSimpleClientset()

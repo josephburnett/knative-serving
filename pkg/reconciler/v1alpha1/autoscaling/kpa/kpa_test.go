@@ -97,6 +97,7 @@ func TestControllerSynchronizesCreatesAndDeletes(t *testing.T) {
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
 		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
+		vpaClient,
 		fakeMetrics,
 		kpaScaler,
 	)
@@ -187,6 +188,7 @@ func TestNonKpaClass(t *testing.T) {
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
 		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
+		vpaClient,
 		fakeMetrics,
 		kpaScaler,
 	)
@@ -250,6 +252,7 @@ func TestNoEndpoints(t *testing.T) {
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
 		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
+		vpaClient,
 		fakeMetrics,
 		kpaScaler,
 	)
@@ -314,6 +317,7 @@ func TestEmptyEndpoints(t *testing.T) {
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
 		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
+		vpaClient,
 		fakeMetrics,
 		kpaScaler,
 	)
@@ -376,6 +380,7 @@ func TestControllerCreateError(t *testing.T) {
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
 		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
+		vpaClient,
 		&failingKPAMetrics{
 			getErr:    errors.NewNotFound(kpa.Resource("Metrics"), key),
 			createErr: want,
@@ -418,6 +423,7 @@ func TestControllerUpdateError(t *testing.T) {
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
 		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
+		vpaClient,
 		&failingKPAMetrics{
 			getErr:    errors.NewNotFound(kpa.Resource("Metrics"), key),
 			createErr: want,
@@ -460,6 +466,7 @@ func TestControllerGetError(t *testing.T) {
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
 		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
+		vpaClient,
 		&failingKPAMetrics{
 			getErr: want,
 		},
@@ -503,6 +510,7 @@ func TestScaleFailure(t *testing.T) {
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
 		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
+		vpaClient,
 		fakeMetrics,
 		kpaScaler,
 	)
@@ -548,6 +556,7 @@ func TestBadKey(t *testing.T) {
 		servingInformer.Autoscaling().V1alpha1().PodAutoscalers(),
 		kubeInformer.Core().V1().Endpoints(),
 		vpaInformer.Autoscaling().V1beta1().VerticalPodAutoscalers(),
+		vpaClient,
 		&failingKPAMetrics{},
 		kpaScaler,
 	)

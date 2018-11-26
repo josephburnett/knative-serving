@@ -38,6 +38,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/wait"
+	vpaclientset "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 	"k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/dynamic"
 	kubeinformers "k8s.io/client-go/informers"
@@ -142,7 +143,7 @@ func main() {
 	hpaInformer := kubeInformerFactory.Autoscaling().V1().HorizontalPodAutoscalers()
 
 	kpaScaler := kpa.NewKPAScaler(servingClientSet, scaleClient, logger, configMapWatcher)
-	kpaCtl := kpa.NewController(&opt, paInformer, endpointsInformer, vpaInformer, multiScaler, kpaScaler)
+	kpaCtl := kpa.NewController(&opt, paInformer, endpointsInformer, vpaInformer, vpaClientSet, multiScaler, kpaScaler)
 	hpaCtl := hpa.NewController(&opt, paInformer, hpaInformer)
 
 	// Start the serving informer factory.

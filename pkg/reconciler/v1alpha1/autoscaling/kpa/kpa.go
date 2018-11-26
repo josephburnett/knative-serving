@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/runtime"
+	vpaclientset "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 	vpainformers "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/informers/externalversions/autoscaling.k8s.io/v1beta1"
 	vpalisters "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/listers/autoscaling.k8s.io/v1beta1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -76,6 +77,7 @@ type Reconciler struct {
 	paLister        listers.PodAutoscalerLister
 	endpointsLister corev1listers.EndpointsLister
 	vpaLister       vpalisters.VerticalPodAutoscalerLister
+	vpaClientSet    vpaclientset.Interface
 
 	kpaMetrics KPAMetrics
 	kpaScaler  KPAScaler
@@ -91,6 +93,7 @@ func NewController(
 	paInformer informers.PodAutoscalerInformer,
 	endpointsInformer corev1informers.EndpointsInformer,
 	vpaInformer vpainformers.VerticalPodAutoscalerInformer,
+	vpaClientSet vpaclientset.Interface,
 
 	kpaMetrics KPAMetrics,
 	kpaScaler KPAScaler,
@@ -101,6 +104,7 @@ func NewController(
 		paLister:        paInformer.Lister(),
 		endpointsLister: endpointsInformer.Lister(),
 		vpaLister:       vpaInformer.Lister(),
+		vpaClientSet:    vpaClientSet,
 		kpaMetrics:      kpaMetrics,
 		kpaScaler:       kpaScaler,
 	}
@@ -239,14 +243,20 @@ func (c *Reconciler) reconcileVPA(ctx context.Context, key string, pa *pav1alpha
 	vpa, err := c.vpaLister.VerticalPodAutoscalers(want.Namespace).Get(want.Name)
 	if errors.IsNotFound(err) {
 		logger.Infof("Creating VPA %q", want.Name)
-		// TODO: create VPA
+		if _, err := c.vpaClientSet.AutoscalingV1beta1().VerticalPodAutoscalers(want.Namespace).Create(want); err != nil {
+			logger.Errorf("Error creating VPA %q: %v", want.Name, err)
+			return err
+		}
 	} else if err != nil {
 		logger.Errorf("Error getting existing VPA %q: %v", want.Name, err)
 		return err
 	} else {
 		if !equality.Semantic.DeepEqual(want.Spec, vpa.Spec) {
 			logger.Info("Update VPA %q", want.Name)
-			// TODO: update VPA
+			if _, err := c.vpaClientSet.AutoscalingV1beta1().VerticalPodAutoscalers(want.Namespace).Update(want); err != nil {
+				logger.Errorf("Error updating VPA %q: %v", want.Name, err)
+				return err
+			}
 		}
 	}
 

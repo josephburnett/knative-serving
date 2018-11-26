@@ -30,11 +30,14 @@ import (
 	informers "github.com/knative/serving/pkg/client/informers/externalversions/autoscaling/v1alpha1"
 	listers "github.com/knative/serving/pkg/client/listers/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/reconciler"
+	"github.com/knative/serving/pkg/reconciler/v1alpha1/autoscaling/kpa/resources"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/runtime"
+	vpainformers "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/informers/externalversions/autoscaling.k8s.io/v1beta1"
+	vpalisters "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/listers/autoscaling.k8s.io/v1beta1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -72,6 +75,7 @@ type Reconciler struct {
 
 	paLister        listers.PodAutoscalerLister
 	endpointsLister corev1listers.EndpointsLister
+	vpaLister       vpalisters.VerticalPodAutoscalerLister
 
 	kpaMetrics KPAMetrics
 	kpaScaler  KPAScaler
@@ -86,6 +90,7 @@ func NewController(
 
 	paInformer informers.PodAutoscalerInformer,
 	endpointsInformer corev1informers.EndpointsInformer,
+	vpaInformer vpainformers.VerticalPodAutoscalersInformer,
 
 	kpaMetrics KPAMetrics,
 	kpaScaler KPAScaler,
@@ -95,6 +100,7 @@ func NewController(
 		Base:            reconciler.NewBase(*opts, controllerAgentName),
 		paLister:        paInformer.Lister(),
 		endpointsLister: endpointsInformer.Lister(),
+		vpaLister:       vpaInformer.Lister(),
 		kpaMetrics:      kpaMetrics,
 		kpaScaler:       kpaScaler,
 	}
@@ -108,6 +114,12 @@ func NewController(
 	})
 
 	endpointsInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    impl.EnqueueLabelOfNamespaceScopedResource("", autoscaling.KPALabelKey),
+		UpdateFunc: controller.PassNew(impl.EnqueueLabelOfNamespaceScopedResource("", autoscaling.KPALabelKey)),
+		DeleteFunc: impl.EnqueueLabelOfNamespaceScopedResource("", autoscaling.KPALabelKey),
+	})
+
+	vpaInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    impl.EnqueueLabelOfNamespaceScopedResource("", autoscaling.KPALabelKey),
 		UpdateFunc: controller.PassNew(impl.EnqueueLabelOfNamespaceScopedResource("", autoscaling.KPALabelKey)),
 		DeleteFunc: impl.EnqueueLabelOfNamespaceScopedResource("", autoscaling.KPALabelKey),
@@ -220,6 +232,27 @@ func (c *Reconciler) reconcileKPA(ctx context.Context, key string, pa *pav1alpha
 	return nil
 }
 
+func (c *Reconciler) reconcileVPA(ctx context.Context, key string, pa *pav1alpha1.PodAutoscaler) error {
+	logger := logging.FromContext(ctx)
+	want := resources.MakeVPA(pa)
+
+	vpa, err := c.vpaLister.VerticalPodAutoscalers(want.Namespace).Get(want.Name)
+	if errors.IsNotFound(err) {
+		logger.Infof("Creating VPA %q", want.Name)
+		// TODO: create VPA
+	} else if err != nil {
+		logger.Errorf("Error getting existing VPA %q: %v", want.Name, err)
+		return err
+	} else {
+		if !equality.Semantic.DeepEqual(want.Spec, vpa.Spec) {
+			logger.Info("Update VPA %q", want.Name)
+			// TODO: update VPA
+		}
+	}
+
+	return nil
+}
+
 func (c *Reconciler) reconcileScale(ctx context.Context, key string, pa *pav1alpha1.PodAutoscaler) error {
 	logger := logging.FromContext(ctx)
 
@@ -295,13 +328,6 @@ func (c *Reconciler) reconcileActiveCondition(ctx context.Context, key string, p
 		pa.Status.MarkActive()
 	}
 
-	return nil
-}
-
-func (c *Reconciler) reconcileVPA(ctx context.Context, key string, pa *pav1alpha1.PodAutoscaler) error {
-	// logger := logging.FromContext(ctx)
-	// want := resources.MakeVPA(pa)
-	// TODO: reconcile the VPA
 	return nil
 }
 

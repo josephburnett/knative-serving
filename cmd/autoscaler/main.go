@@ -108,6 +108,11 @@ func main() {
 		logger.Fatal("Error building serving clientset.", zap.Error(err))
 	}
 
+	vpaClientSet, err := vpaclientset.NewForConfig(cfg)
+	if err != nil {
+		logger.Fatal("Error building vpa clientset.", zap.Error(err))
+	}
+
 	rawConfig, err := configmap.Load("/etc/config-autoscaler")
 	if err != nil {
 		logger.Fatalf("Error reading autoscaler configuration: %v", err)
@@ -129,13 +134,15 @@ func main() {
 
 	servingInformerFactory := informers.NewSharedInformerFactory(servingClientSet, time.Second*30)
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClientSet, time.Second*30)
+	vpaInformerFactory := vpainformers.NewSharedInformerFactory(vpaClientSet, time.Second*30)
 
 	paInformer := servingInformerFactory.Autoscaling().V1alpha1().PodAutoscalers()
 	endpointsInformer := kubeInformerFactory.Core().V1().Endpoints()
+	vpaInformer := vpaInformerFactory.Autoscaling().V1beta1().VerticalPodAutoscalers()
 	hpaInformer := kubeInformerFactory.Autoscaling().V1().HorizontalPodAutoscalers()
 
 	kpaScaler := kpa.NewKPAScaler(servingClientSet, scaleClient, logger, configMapWatcher)
-	kpaCtl := kpa.NewController(&opt, paInformer, endpointsInformer, multiScaler, kpaScaler)
+	kpaCtl := kpa.NewController(&opt, paInformer, endpointsInformer, vpaInformer, multiScaler, kpaScaler)
 	hpaCtl := hpa.NewController(&opt, paInformer, hpaInformer)
 
 	// Start the serving informer factory.
@@ -150,6 +157,7 @@ func main() {
 	for i, synced := range []cache.InformerSynced{
 		paInformer.Informer().HasSynced,
 		endpointsInformer.Informer().HasSynced,
+		vpaInformer.Informer().HasSynced,
 		hpaInformer.Informer().HasSynced,
 	} {
 		if ok := cache.WaitForCacheSync(stopCh, synced); !ok {

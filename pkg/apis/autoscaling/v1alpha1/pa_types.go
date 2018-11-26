@@ -107,6 +107,8 @@ type PodAutoscalerStatus struct {
 	// state of the world.
 	// +optional
 	Conditions duckv1alpha1.Conditions `json:"conditions,omitempty"`
+	// RecommendedScale is the recommended number of pods to run.
+	RecommendedScale *int32
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

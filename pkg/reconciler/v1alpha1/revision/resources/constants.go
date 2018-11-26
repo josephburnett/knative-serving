@@ -21,10 +21,10 @@ import (
 )
 
 const (
-	userContainerName    = "user-container"
-	fluentdContainerName = "fluentd-proxy"
-	envoyContainerName   = "istio-proxy"
-	queueContainerName   = "queue-proxy"
+	UserContainerName    = "user-container"
+	FluentdContainerName = "fluentd-proxy"
+	EnvoyContainerName   = "istio-proxy"
+	QueueContainerName   = "queue-proxy"
 
 	sidecarIstioInjectAnnotation = "sidecar.istio.io/inject"
 	// TODO(mattmoor): Make this private once we remove revision_test.go
@@ -57,14 +57,14 @@ var (
 	queueContainerCPU   = resource.MustParse("25m")
 
 	// Limit CPU recommendation to 2000m
-	userContainerMaxCPU    = resource.MustParse("1700m")
-	fluentdContainerMaxCPU = resource.MustParse("100m")
-	envoyContainerMaxCPU   = resource.MustParse("200m")
-	queueContainerMaxCPU   = resource.MustParse("200m")
+	UserContainerMaxCPU    = resource.MustParse("1700m")
+	FluentdContainerMaxCPU = resource.MustParse("100m")
+	EnvoyContainerMaxCPU   = resource.MustParse("200m")
+	QueueContainerMaxCPU   = resource.MustParse("200m")
 
 	// Limit memory recommendation to 4G
-	userContainerMaxMemory    = resource.MustParse("3700M")
-	fluentdContainerMaxMemory = resource.MustParse("100M")
-	envoyContainerMaxMemory   = resource.MustParse("100M")
-	queueContainerMaxMemory   = resource.MustParse("100M")
+	UserContainerMaxMemory    = resource.MustParse("3700M")
+	FluentdContainerMaxMemory = resource.MustParse("100M")
+	EnvoyContainerMaxMemory   = resource.MustParse("100M")
+	QueueContainerMaxMemory   = resource.MustParse("100M")
 )

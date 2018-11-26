@@ -19,18 +19,17 @@ package resources
 import (
 	"fmt"
 
-	appsv1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	caching "github.com/knative/caching/pkg/apis/caching/v1alpha1"
 	"github.com/knative/pkg/kmeta"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
 	"github.com/knative/serving/pkg/reconciler/v1alpha1/revision/resources/names"
+	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func MakeImageCache(rev *v1alpha1.Revision, deploy *appsv1.Deployment) (*caching.Image, error) {
 	for _, container := range deploy.Spec.Template.Spec.Containers {
-		if container.Name != userContainerName {
+		if container.Name != UserContainerName {
 			// The sidecars are cached once separately.
 			continue
 		}
@@ -53,5 +52,5 @@ func MakeImageCache(rev *v1alpha1.Revision, deploy *appsv1.Deployment) (*caching
 
 		return img, nil
 	}
-	return nil, fmt.Errorf("user container %q not found: %v", userContainerName, deploy)
+	return nil, fmt.Errorf("user container %q not found: %v", UserContainerName, deploy)
 }

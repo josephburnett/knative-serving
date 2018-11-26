@@ -30,6 +30,7 @@ import (
 	informers "github.com/knative/serving/pkg/client/informers/externalversions/autoscaling/v1alpha1"
 	listers "github.com/knative/serving/pkg/client/listers/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/reconciler"
+	"github.com/knative/serving/pkg/reconciler/v1alpha1/autoscaling/kpa/resources"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -168,8 +169,43 @@ func (c *Reconciler) Reconcile(ctx context.Context, key string) error {
 func (c *Reconciler) reconcile(ctx context.Context, key string, pa *pav1alpha1.PodAutoscaler) error {
 	logger := logging.FromContext(ctx)
 
+	phases := []struct {
+		name string
+		f    func(context.Context, string, *pav1alpha1.PodAutoscaler) error
+	}{{
+		name: "kpa",
+		f:    c.reconcileKPA,
+	}, {
+		name: "vpa",
+		f:    c.reconcileVPA,
+	}, {
+		name: "scale",
+		f:    c.reconcileScale,
+	}, {
+		name: "active condition",
+		f:    c.reconcileActiveCondition,
+	}}
+
+	for _, phase := range phases {
+		if err := phase.f(ctx, key, pa); err != nil {
+			logger.Errorf("Failed to reconcile %s: %v", phase.name, zap.Error(err))
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *Reconciler) reconcileKPA(ctx context.Context, key string, pa *pav1alpha1.PodAutoscaler) error {
+	logger := logging.FromContext(ctx)
+
 	pa.Status.InitializeConditions()
 	logger.Debug("PA exists")
+
+	err := c.reconcileVPA(ctx, key, pa)
+	if err != nil {
+		return err
+	}
 
 	metric, err := c.kpaMetrics.Get(ctx, key)
 	if errors.IsNotFound(err) {
@@ -182,6 +218,16 @@ func (c *Reconciler) reconcile(ctx context.Context, key string, pa *pav1alpha1.P
 		logger.Errorf("Error fetching Metric: %v", err)
 		return err
 	}
+	return nil
+}
+
+func (c *Reconciler) reconcileScale(ctx context.Context, key string, pa *pav1alpha1.PodAutoscaler) error {
+	logger := logging.FromContext(ctx)
+
+	metric, err := c.kpaMetrics.Get(ctx, key)
+	if err != nil {
+		return err
+	}
 
 	// Get the appropriate current scale from the metric, and right size
 	// the scaleTargetRef based on it.
@@ -190,6 +236,20 @@ func (c *Reconciler) reconcile(ctx context.Context, key string, pa *pav1alpha1.P
 		logger.Errorf("Error scaling target: %v", err)
 		return err
 	}
+
+	pa.Status.RecommendedScale = &want
+
+	return nil
+}
+
+func (c *Reconciler) reconcileActiveCondition(ctx context.Context, key string, pa *pav1alpha1.PodAutoscaler) error {
+	logger := logging.FromContext(ctx)
+
+	if pa.Status.RecommendedScale == nil {
+		// No scale recommendation. Nothing to check.
+		return
+	}
+	want := *pa.Status.RecommendedScale
 
 	// Compare the desired and observed resources to determine our situation.
 	got := 0
@@ -222,7 +282,7 @@ func (c *Reconciler) reconcile(ctx context.Context, key string, pa *pav1alpha1.P
 	}
 
 	reporter.Report(autoscaler.ActualPodCountM, float64(got))
-	reporter.Report(autoscaler.RequestedPodCountM, float64(want))
+	reporter.Report(autoscaler.RequestedPodCountM, float64())
 
 	switch {
 	case want == 0:
@@ -236,6 +296,13 @@ func (c *Reconciler) reconcile(ctx context.Context, key string, pa *pav1alpha1.P
 		pa.Status.MarkActive()
 	}
 
+	return nil
+}
+
+func (c *Reconciler) reconcileVPA(ctx context.Context, key string, pa *pav1alpha1.PodAutoscaler) error {
+	logger := logging.FromContext(ctx)
+	want := resources.MakeVPA(pa)
+	// TODO: reconcile the VPA
 	return nil
 }
 

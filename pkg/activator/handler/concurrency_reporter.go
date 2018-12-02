@@ -70,7 +70,7 @@ func NewConcurrencyReporter(podName string, channels Channels) {
 				switch event.EventType {
 				case ReqIn:
 					incomingRequestsPerKey[event.Key]++
-					// Report the first request for a key immediately.
+					// Report the first request for a given key immediately.
 					if _, ok := outstandingRequestsPerKey[event.Key]; !ok {
 						report(time.Now(), event.Key, 1)
 					}

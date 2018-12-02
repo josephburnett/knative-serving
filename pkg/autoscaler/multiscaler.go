@@ -24,10 +24,9 @@ import (
 
 	"github.com/knative/pkg/logging"
 	"github.com/knative/pkg/logging/logkey"
+	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/errors"
-
-	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 )
 
 const (
@@ -57,6 +56,7 @@ type UniScalerFactory func(*kpa.PodAutoscaler, *DynamicConfig) (UniScaler, error
 // scalerRunner wraps a UniScaler and a channel for implementing shutdown behavior.
 type scalerRunner struct {
 	scaler UniScaler
+	pokeCh chan struct{}
 	stopCh chan struct{}
 
 	// lsm guards access to latestScale
@@ -167,11 +167,16 @@ func (m *MultiScaler) createScaler(ctx context.Context, kpa *kpa.PodAutoscaler) 
 		return nil, err
 	}
 
+	pokeCh := make(chan struct{}, 1) // don't block on poking
 	stopCh := make(chan struct{})
-	runner := &scalerRunner{scaler: scaler, latestScale: -1, stopCh: stopCh}
+	runner := &scalerRunner{
+		scaler:      scaler,
+		latestScale: -1,
+		pokeCh:      pokeCh,
+		stopCh:      stopCh,
+	}
 
 	ticker := time.NewTicker(m.dynConfig.Current().TickInterval)
-
 	scaleChan := make(chan int32, scaleBufferSize)
 
 	go func() {
@@ -183,7 +188,11 @@ func (m *MultiScaler) createScaler(ctx context.Context, kpa *kpa.PodAutoscaler) 
 			case <-stopCh:
 				ticker.Stop()
 				return
+			case <-pokeCh:
+				// Tick when poked.
+				m.tickScaler(ctx, scaler, scaleChan)
 			case <-ticker.C:
+				// Tick on an interval.
 				m.tickScaler(ctx, scaler, scaleChan)
 			}
 		}
@@ -240,5 +249,9 @@ func (m *MultiScaler) RecordStat(key string, stat Stat) {
 		logger := m.logger.With(zap.String(logkey.Key, key))
 		ctx := logging.WithLogger(context.TODO(), logger)
 		scaler.scaler.Record(ctx, stat)
+		// Poke the scaler if this is the first request for a given key.
+		if scaler.latestScale == 0 && stat.PodName == ActivatorPodName {
+			scaler.pokeCh <- struct{}{}
+		}
 	}
 }

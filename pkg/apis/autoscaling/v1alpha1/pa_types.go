@@ -159,6 +159,15 @@ func (pa *PodAutoscaler) MetricTarget() (target int32, ok bool) {
 	return 0, false
 }
 
+func (pa *PodAutoscaler) Window() (window time.Duration, ok bool) {
+	if w, ok := pa.Annotations[autoscaling.WindowAnnotationKey]; ok {
+		if d, err := time.ParseDuration(w); err != nil {
+			return d, true
+		}
+	}
+	return 0, false
+}
+
 // IsReady looks at the conditions and if the Status has a condition
 // PodAutoscalerConditionReady returns true if ConditionStatus is True
 func (rs *PodAutoscalerStatus) IsReady() bool {

@@ -40,10 +40,21 @@ func MakeMetric(ctx context.Context, pa *v1alpha1.PodAutoscaler, config *autosca
 			target = annotationTarget
 		}
 	}
+
+	window := config.StableWindow
+	if w, ok := pa.Window(); ok {
+		if w > window {
+			window = w
+		} else {
+			logger.Infof("Ignoring window of %v because it is less than the minimum %v.", w, window)
+		}
+	}
+
 	return &autoscaler.Metric{
 		ObjectMeta: pa.ObjectMeta,
 		Spec: autoscaler.MetricSpec{
 			TargetConcurrency: target,
+			Window:            window,
 		},
 	}
 }

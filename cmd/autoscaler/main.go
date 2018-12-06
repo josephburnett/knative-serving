@@ -218,7 +218,7 @@ func uniScalerFactory(metric *autoscaler.Metric, dynamicConfig *autoscaler.Dynam
 		return nil, err
 	}
 
-	return autoscaler.New(dynamicConfig, metric.Spec.TargetConcurrency, reporter), nil
+	return autoscaler.New(dynamicConfig, reporter, metric.Spec), nil
 }
 
 func labelValueOrEmpty(metric *autoscaler.Metric, labelKey string) string {

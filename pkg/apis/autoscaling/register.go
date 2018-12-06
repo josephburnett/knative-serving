@@ -55,6 +55,11 @@ const (
 	//   autoscaling.knative.dev/target: 75   # target 75% cpu utilization
 	TargetAnnotationKey = GroupName + "/target"
 
+	// WindowAnnotationKey is the annotation to specify over which time period to
+	// consider metrics when maintaining the target value. Smaller values are more
+	// responsive but less stable. Minimum is "60s".
+	WindowAnnotationKey = GroupName + "/window"
+
 	// KPALabelKey is the label key attached to a K8s Service to hint to the KPA
 	// which services/endpoints should trigger reconciles.
 	KPALabelKey = GroupName + "/kpa"

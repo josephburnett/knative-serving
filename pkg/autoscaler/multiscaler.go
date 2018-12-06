@@ -45,6 +45,7 @@ type Metric struct {
 
 type MetricSpec struct {
 	TargetConcurrency float64
+	Window            time.Duration
 }
 
 type MetricStatus struct {

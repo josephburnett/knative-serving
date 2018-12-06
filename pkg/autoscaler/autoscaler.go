@@ -187,6 +187,7 @@ type Autoscaler struct {
 	*DynamicConfig
 	key          string
 	target       float64
+	window       time.Duration
 	stats        map[statKey]Stat
 	statsMutex   sync.Mutex
 	panicking    bool
@@ -197,10 +198,11 @@ type Autoscaler struct {
 }
 
 // New creates a new instance of autoscaler
-func New(dynamicConfig *DynamicConfig, target float64, reporter StatsReporter) *Autoscaler {
+func New(dynamicConfig *DynamicConfig, reporter StatsReporter, spec MetricSpec) *Autoscaler {
 	return &Autoscaler{
 		DynamicConfig: dynamicConfig,
-		target:        target,
+		target:        spec.TargetConcurrency,
+		window:        spec.Window,
 		stats:         make(map[statKey]Stat),
 		reporter:      reporter,
 	}
@@ -244,7 +246,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	config := a.Current()
 
 	// 60 second window
-	stableData := newTotalAggregation(config.StableWindow)
+	stableData := newTotalAggregation(a.window)
 
 	// 6 second window
 	panicData := newTotalAggregation(config.PanicWindow)
@@ -258,7 +260,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 		if instant.Add(config.PanicWindow).After(now) {
 			panicData.aggregate(stat)
 		}
-		if instant.Add(config.StableWindow).After(now) {
+		if instant.Add(a.window).After(now) {
 			stableData.aggregate(stat)
 
 			// If there's no last stat for this pod, set it
@@ -306,12 +308,12 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	a.reporter.Report(TargetConcurrencyM, a.target)
 
 	logger.Debugf("STABLE: Observed average %0.3f concurrency over %v seconds over %v samples over %v pods.",
-		observedStableConcurrencyPerPod, config.StableWindow, stableData.probeCount, stableData.observedPods(now))
+		observedStableConcurrencyPerPod, a.window, stableData.probeCount, stableData.observedPods(now))
 	logger.Debugf("PANIC: Observed average %0.3f concurrency over %v seconds over %v samples over %v pods.",
 		observedPanicConcurrencyPerPod, config.PanicWindow, panicData.probeCount, panicData.observedPods(now))
 
 	// Stop panicking after the surge has made its way into the stable metric.
-	if a.panicking && a.panicTime.Add(config.StableWindow).Before(now) {
+	if a.panicking && a.panicTime.Add(a.window).Before(now) {
 		logger.Info("Un-panicking.")
 		a.reporter.Report(PanicM, 0)
 		a.panicking = false

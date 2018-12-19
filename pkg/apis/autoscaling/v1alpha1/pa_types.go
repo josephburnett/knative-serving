@@ -150,11 +150,24 @@ func (pa *PodAutoscaler) ScaleBounds() (min, max int32) {
 	return
 }
 
+// MetricTarget returns the metric annotation value or false if not present.
 func (pa *PodAutoscaler) MetricTarget() (target int32, ok bool) {
 	if s, ok := pa.Annotations[autoscaling.TargetAnnotationKey]; ok {
 		if i, err := strconv.Atoi(s); err == nil {
 			return int32(i), true
 		}
+	}
+	return 0, false
+}
+
+// Window returns the window annotation value or false if not present.
+func (pa *PodAutoscaler) Window() (window time.Duration, ok bool) {
+	if s, ok := pa.Annotations[autoscaling.WindowAnnotationKey]; ok {
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			return 0, false
+		}
+		return d, true
 	}
 	return 0, false
 }

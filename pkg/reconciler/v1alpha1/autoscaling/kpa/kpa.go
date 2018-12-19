@@ -70,6 +70,7 @@ type KPAScaler interface {
 }
 
 // Reconciler tracks PAs and right sizes the ScaleTargetRef based on the
+
 // information from KPAMetrics.
 type Reconciler struct {
 	*reconciler.Base

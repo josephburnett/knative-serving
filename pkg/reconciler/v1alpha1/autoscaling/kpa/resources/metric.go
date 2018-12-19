@@ -43,10 +43,17 @@ func MakeMetric(ctx context.Context, pa *v1alpha1.PodAutoscaler, config *autosca
 			target = annotationTarget
 		}
 	}
+
+	window := config.StableWindow
+	if w, ok := pa.Window(); ok {
+		window = w
+	}
+
 	return &autoscaler.Metric{
 		ObjectMeta: pa.ObjectMeta,
 		Spec: autoscaler.MetricSpec{
 			TargetConcurrency: target,
+			Window:            window,
 		},
 	}
 }

@@ -64,9 +64,8 @@ type statKey struct {
 }
 
 // Creates a new totalAggregation
-func newTotalAggregation(window time.Duration) *totalAggregation {
+func newTotalAggregation() *totalAggregation {
 	return &totalAggregation{
-		window:              window,
 		perPodAggregations:  make(map[string]*perPodAggregation),
 		activatorsContained: make(map[string]struct{}),
 	}
@@ -74,17 +73,16 @@ func newTotalAggregation(window time.Duration) *totalAggregation {
 
 // Holds an aggregation across all pods
 type totalAggregation struct {
-	window              time.Duration
 	perPodAggregations  map[string]*perPodAggregation
 	probeCount          int32
 	activatorsContained map[string]struct{}
 }
 
 // Aggregates a given stat to the correct pod-aggregation
-func (agg *totalAggregation) aggregate(stat Stat) {
+func (agg *totalAggregation) aggregate(window time.Duration, stat Stat) {
 	current, exists := agg.perPodAggregations[stat.PodName]
 	if !exists {
-		current = &perPodAggregation{window: agg.window}
+		current = &perPodAggregation{}
 		agg.perPodAggregations[stat.PodName] = current
 	}
 	if stat.LameDuck {
@@ -101,10 +99,10 @@ func (agg *totalAggregation) aggregate(stat Stat) {
 
 // The number of pods that are observable via stats
 // Subtracts the activator pod if its not the only pod reporting stats
-func (agg *totalAggregation) observedPods(now time.Time) float64 {
+func (agg *totalAggregation) observedPods(window time.Duration, now time.Time) float64 {
 	podCount := float64(0.0)
 	for _, pod := range agg.perPodAggregations {
-		podCount += pod.usageRatio(now)
+		podCount += pod.usageRatio(window, now)
 	}
 
 	activatorsCount := len(agg.activatorsContained)
@@ -123,16 +121,16 @@ func (agg *totalAggregation) observedPods(now time.Time) float64 {
 // The observed concurrency per pod (sum of all average concurrencies
 // distributed over the observed pods)
 // Ignores activator sent metrics if its not the only pod reporting stats
-func (agg *totalAggregation) observedConcurrencyPerPod(now time.Time) float64 {
+func (agg *totalAggregation) observedConcurrencyPerPod(window time.Duration, now time.Time) float64 {
 	accumulatedConcurrency := float64(0)
 	activatorConcurrency := float64(0)
-	observedPods := agg.observedPods(now)
+	observedPods := agg.observedPods(window, now)
 	for podName, perPod := range agg.perPodAggregations {
 		// TODO(#2282): This can cause naming collisions.
 		if strings.HasPrefix(podName, ActivatorPodName) {
-			activatorConcurrency += perPod.calculateAverage(now)
+			activatorConcurrency += perPod.calculateAverage(window, now)
 		} else {
-			accumulatedConcurrency += perPod.calculateAverage(now)
+			accumulatedConcurrency += perPod.calculateAverage(window, now)
 		}
 	}
 	if accumulatedConcurrency == 0.0 {
@@ -145,7 +143,6 @@ func (agg *totalAggregation) observedConcurrencyPerPod(now time.Time) float64 {
 type perPodAggregation struct {
 	accumulatedConcurrency float64
 	probeCount             int32
-	window                 time.Duration
 	lameduckTime           *time.Time
 }
 
@@ -166,20 +163,20 @@ func (agg *perPodAggregation) lameduck(t *time.Time) {
 }
 
 // Calculates the average concurrency over all values given
-func (agg *perPodAggregation) calculateAverage(now time.Time) float64 {
+func (agg *perPodAggregation) calculateAverage(window time.Duration, now time.Time) float64 {
 	if agg.probeCount == 0 {
 		return 0.0
 	}
-	return agg.accumulatedConcurrency / float64(agg.probeCount) * agg.usageRatio(now)
+	return agg.accumulatedConcurrency / float64(agg.probeCount) * agg.usageRatio(window, now)
 }
 
 // Calculates the weighted pod count
-func (agg *perPodAggregation) usageRatio(now time.Time) float64 {
+func (agg *perPodAggregation) usageRatio(window time.Duration, now time.Time) float64 {
 	if agg.lameduckTime == nil {
 		return float64(1.0)
 	}
 	outOfService := now.Sub(*agg.lameduckTime)
-	return float64(1.0) - (float64(outOfService) / float64(agg.window))
+	return float64(1.0) - (float64(outOfService) / float64(window))
 }
 
 // Autoscaler stores current state of an instance of an autoscaler
@@ -187,6 +184,7 @@ type Autoscaler struct {
 	*DynamicConfig
 	key          string
 	target       float64
+	window       time.Duration
 	stats        map[statKey]Stat
 	statsMutex   sync.Mutex
 	panicking    bool
@@ -197,10 +195,11 @@ type Autoscaler struct {
 }
 
 // New creates a new instance of autoscaler
-func New(dynamicConfig *DynamicConfig, target float64, reporter StatsReporter) *Autoscaler {
+func New(dynamicConfig *DynamicConfig, spec MetricSpec, reporter StatsReporter) *Autoscaler {
 	return &Autoscaler{
 		DynamicConfig: dynamicConfig,
-		target:        target,
+		target:        spec.TargetConcurrency,
+		window:        spec.Window,
 		stats:         make(map[statKey]Stat),
 		reporter:      reporter,
 	}
@@ -211,6 +210,7 @@ func (a *Autoscaler) Update(spec MetricSpec) error {
 	a.targetMutex.Lock()
 	defer a.targetMutex.Unlock()
 	a.target = spec.TargetConcurrency
+	a.window = spec.Window
 	return nil
 }
 
@@ -244,10 +244,10 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	config := a.Current()
 
 	// 60 second window
-	stableData := newTotalAggregation(config.StableWindow)
+	stableData := newTotalAggregation()
 
 	// 6 second window
-	panicData := newTotalAggregation(config.PanicWindow)
+	panicData := newTotalAggregation()
 
 	// Last stat per Pod
 	lastStat := make(map[string]Stat)
@@ -256,10 +256,10 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	for key, stat := range a.stats {
 		instant := key.time
 		if instant.Add(config.PanicWindow).After(now) {
-			panicData.aggregate(stat)
+			panicData.aggregate(config.PanicWindow, stat)
 		}
-		if instant.Add(config.StableWindow).After(now) {
-			stableData.aggregate(stat)
+		if instant.Add(a.window).After(now) {
+			stableData.aggregate(a.window, stat)
 
 			// If there's no last stat for this pod, set it
 			if _, ok := lastStat[stat.PodName]; !ok {
@@ -276,7 +276,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	}
 
 	// Do nothing when we have no data.
-	if stableData.observedPods(now) < 1.0 {
+	if stableData.observedPods(a.window, now) < 1.0 {
 		logger.Debug("No data to scale on.")
 		return 0, false
 	}
@@ -290,28 +290,28 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	}
 	logger.Debugf("Current QPS: %v  Current concurrent clients: %v", totalCurrentQPS, totalCurrentConcurrency)
 
-	observedStableConcurrencyPerPod := stableData.observedConcurrencyPerPod(now)
-	observedPanicConcurrencyPerPod := panicData.observedConcurrencyPerPod(now)
+	observedStableConcurrencyPerPod := stableData.observedConcurrencyPerPod(a.window, now)
+	observedPanicConcurrencyPerPod := panicData.observedConcurrencyPerPod(config.PanicWindow, now)
 	// Desired scaling ratio is observed concurrency over desired (stable) concurrency.
 	// Rate limited to within MaxScaleUpRate.
 	desiredStableScalingRatio := a.rateLimited(observedStableConcurrencyPerPod / a.target)
 	desiredPanicScalingRatio := a.rateLimited(observedPanicConcurrencyPerPod / a.target)
 
-	desiredStablePodCount := desiredStableScalingRatio * stableData.observedPods(now)
-	desiredPanicPodCount := desiredPanicScalingRatio * stableData.observedPods(now)
+	desiredStablePodCount := desiredStableScalingRatio * stableData.observedPods(a.window, now)
+	desiredPanicPodCount := desiredPanicScalingRatio * stableData.observedPods(config.PanicWindow, now)
 
-	a.reporter.Report(ObservedPodCountM, float64(stableData.observedPods(now)))
+	a.reporter.Report(ObservedPodCountM, float64(stableData.observedPods(a.window, now)))
 	a.reporter.Report(StableRequestConcurrencyM, observedStableConcurrencyPerPod)
 	a.reporter.Report(PanicRequestConcurrencyM, observedPanicConcurrencyPerPod)
 	a.reporter.Report(TargetConcurrencyM, a.target)
 
 	logger.Debugf("STABLE: Observed average %0.3f concurrency over %v seconds over %v samples over %v pods.",
-		observedStableConcurrencyPerPod, config.StableWindow, stableData.probeCount, stableData.observedPods(now))
+		observedStableConcurrencyPerPod, a.window, stableData.probeCount, stableData.observedPods(a.window, now))
 	logger.Debugf("PANIC: Observed average %0.3f concurrency over %v seconds over %v samples over %v pods.",
-		observedPanicConcurrencyPerPod, config.PanicWindow, panicData.probeCount, panicData.observedPods(now))
+		observedPanicConcurrencyPerPod, config.PanicWindow, panicData.probeCount, panicData.observedPods(config.PanicWindow, now))
 
 	// Stop panicking after the surge has made its way into the stable metric.
-	if a.panicking && a.panicTime.Add(config.StableWindow).Before(now) {
+	if a.panicking && a.panicTime.Add(a.window).Before(now) {
 		logger.Info("Un-panicking.")
 		a.reporter.Report(PanicM, 0)
 		a.panicking = false
@@ -320,7 +320,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	}
 
 	// Begin panicking when we cross the 6 second concurrency threshold.
-	if !a.panicking && panicData.observedPods(now) > 0.0 && observedPanicConcurrencyPerPod >= (a.target*2) {
+	if !a.panicking && panicData.observedPods(config.PanicWindow, now) > 0.0 && observedPanicConcurrencyPerPod >= (a.target*2) {
 		logger.Info("PANICKING")
 		a.reporter.Report(PanicM, 1)
 		a.panicking = true
@@ -332,7 +332,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	if a.panicking {
 		logger.Debug("Operating in panic mode.")
 		if desiredPanicPodCount > a.maxPanicPods {
-			logger.Infof("Increasing pods from %v to %v.", panicData.observedPods(now), int(desiredPanicPodCount))
+			logger.Infof("Increasing pods from %v to %v.", panicData.observedPods(config.PanicWindow, now), int(desiredPanicPodCount))
 			a.panicTime = &now
 			a.maxPanicPods = desiredPanicPodCount
 		}

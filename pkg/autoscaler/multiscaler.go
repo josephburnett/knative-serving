@@ -49,6 +49,7 @@ type Metric struct {
 // MetricSpec is the parameters in which the Revision should scaled.
 type MetricSpec struct {
 	TargetConcurrency float64
+	Window            time.Duration
 }
 
 // MetricStatus is the current scale recommendation.

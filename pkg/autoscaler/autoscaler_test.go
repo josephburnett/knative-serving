@@ -480,8 +480,61 @@ func TestAutoscaler_UpdateTarget(t *testing.T) {
 	a.expectScale(t, now, 10, true)
 	a.Update(MetricSpec{
 		TargetConcurrency: 1.0,
+		Window:            a.window,
 	})
 	a.expectScale(t, now, 100, true)
+}
+
+func TestAutoscaler_UpdateIncreaseWindow(t *testing.T) {
+	a := newTestAutoscaler(10.0)
+	now := a.recordLinearSeries(
+		t,
+		time.Now(),
+		linearSeries{
+			startConcurrency: 10,
+			endConcurrency:   10,
+			durationSeconds:  60,
+			podCount:         10,
+		})
+	a.expectScale(t, now, 10, true)
+	a.Update(MetricSpec{
+		TargetConcurrency: a.target,
+		Window:            a.window * 2,
+	})
+	// Increasing the window retains all data and the desired scale
+	// will not change.
+	a.expectScale(t, now, 10, true)
+}
+
+func TestAutoscaler_UpdateDecreaseWindow(t *testing.T) {
+	a := newTestAutoscaler(10.0)
+	now := a.recordLinearSeries(
+		t,
+		time.Now(),
+		linearSeries{
+			startConcurrency: 30,
+			endConcurrency:   30,
+			durationSeconds:  30,
+			podCount:         10,
+		})
+	now = a.recordLinearSeries(
+		t,
+		now,
+		linearSeries{
+			startConcurrency: 10,
+			endConcurrency:   10,
+			durationSeconds:  30,
+			podCount:         10,
+		})
+	// Average concurrency is 20.
+	a.expectScale(t, now, 20, true)
+	a.Update(MetricSpec{
+		TargetConcurrency: a.target,
+		Window:            a.window / 2,
+	})
+	// Decreasing the window will truncate older data, in this case
+	// the higher concurrency reading of 30.
+	a.expectScale(t, now, 10, true)
 }
 
 type linearSeries struct {

@@ -24,7 +24,6 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
-	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -54,7 +53,7 @@ func TestTargetConcurrency(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := c.TargetConcurrency(v1alpha1.RevisionContainerConcurrencyType(test.containerConcurrency))
+			got := c.TargetConcurrency(float64(test.containerConcurrency))
 			if got != test.want {
 				t.Errorf("TargetConcurrency() = %v, want %v", got, test.want)
 			}

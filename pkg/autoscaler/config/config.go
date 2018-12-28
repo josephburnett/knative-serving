@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -55,11 +54,11 @@ type Config struct {
 
 // TargetConcurrency calculates the target concurrency for a given container-concurrency
 // taking the container-concurrency-target-percentage into account.
-func (c *Config) TargetConcurrency(concurrency v1alpha1.RevisionContainerConcurrencyType) float64 {
+func (c *Config) TargetConcurrency(concurrency float64) float64 {
 	if concurrency == 0 {
 		return c.ContainerConcurrencyTargetDefault
 	}
-	return float64(concurrency) * c.ContainerConcurrencyTargetPercentage
+	return concurrency * c.ContainerConcurrencyTargetPercentage
 }
 
 // NewConfigFromMap creates a Config from the supplied map

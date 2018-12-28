@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/knative/pkg/logging"
+	"github.com/knative/serving/pkg/autoscaler/config"
 )
 
 const (
@@ -181,7 +182,7 @@ func (agg *perPodAggregation) usageRatio(window time.Duration, now time.Time) fl
 
 // Autoscaler stores current state of an instance of an autoscaler
 type Autoscaler struct {
-	*DynamicConfig
+	*config.DynamicConfig
 	key          string
 	target       float64
 	window       time.Duration
@@ -195,7 +196,7 @@ type Autoscaler struct {
 }
 
 // New creates a new instance of autoscaler
-func New(dynamicConfig *DynamicConfig, spec MetricSpec, reporter StatsReporter) *Autoscaler {
+func New(dynamicConfig *config.DynamicConfig, spec MetricSpec, reporter StatsReporter) *Autoscaler {
 	return &Autoscaler{
 		DynamicConfig: dynamicConfig,
 		target:        spec.TargetConcurrency,

@@ -51,6 +51,7 @@ ${GOPATH}/bin/deepcopy-gen \
   -i github.com/knative/serving/pkg/reconciler/v1alpha1/revision/config \
   -i github.com/knative/serving/pkg/reconciler/v1alpha1/route/config \
   -i github.com/knative/serving/pkg/autoscaler \
+  -i github.com/knative/serving/pkg/autoscaler/config \
   -i github.com/knative/serving/pkg/gc \
   -i github.com/knative/serving/pkg/logging
 

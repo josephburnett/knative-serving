@@ -17,22 +17,18 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"sync/atomic"
-	"time"
+	"strconv"
 
 	"github.com/knative/serving/pkg/apis/autoscaling"
 	servingv1alpha1 "github.com/knative/serving/pkg/apis/serving/v1alpha1"
+	"github.com/knative/serving/pkg/autoscaler/config"
 )
 
 // github.com/knative/pkg/webhook doesn't pass a configmap through to
 // SetDefaults so we use package-level defaults set by main.go as a
 // side-channel.
-// TODO: Plumb a generic config map through webhook to SetDefaults()
 var (
-	DefaultWindow                atomic.Value
-	DefaultTarget                atomic.Value
-	DefaultWindowPanicPercentage atomic.Value
-	DefaultTargetPanicPercentage atomic.Value
+	AutoscalerConfig *config.DynamicConfig
 )
 
 func (r *PodAutoscaler) SetDefaults() {
@@ -51,27 +47,34 @@ func (r *PodAutoscaler) SetDefaults() {
 			r.Annotations[autoscaling.MetricAnnotationKey] = autoscaling.Concurrency
 		}
 		// KPA specific defaults.
-		window := autoscaling.WindowAnnotationKey
-		target := autoscaling.TargetAnnotationKey
-		wpanic := autoscaling.WindowPanicPercentageAnnotationKey
-		tpanic := autoscaling.TargetPanicPercentageAnnotationKey
-		if _, ok := r.Annotations[window]; !ok && DefaultWindow.Load() != nil {
-			r.Annotations[window] = DefaultWindow.Load().(time.Duration)
-		}
-		if _, ok := r.Annotations[target]; !ok && DefaultTarget.Load() != nil {
-			r.Annotations[target] = DefaultTarget.Load().(float64)
-		}
-		if _, ok := r.Annotations[wpanic]; !ok && DefaultWindowPanicPercentage.Load() != nil {
-			r.Annotations[wpanic] = DefaultWindowPanicPercentage.Load().(float64)
-		}
-		if _, ok := r.Annotations[tpanic]; !ok && DefaultTargetPanicPercentage.Load() != nil {
-			r.Annotations[tpanic] = DefaultTargetPanicPercentage.Load().(float64)
+		if AutoscalerConfig != nil {
+			current := AutoscalerConfig.Current()
+			window := autoscaling.WindowAnnotationKey
+			target := autoscaling.TargetAnnotationKey
+			wpanic := autoscaling.WindowPanicPercentageAnnotationKey
+			tpanic := autoscaling.TargetPanicPercentageAnnotationKey
+			if _, ok := r.Annotations[window]; !ok && AutoscalerConfig != nil {
+				r.Annotations[window] = current.StableWindow.String()
+			}
+			if _, ok := r.Annotations[target]; !ok && AutoscalerConfig != nil {
+				r.Annotations[target] = asString(current.ContainerConcurrencyTargetDefault)
+			}
+			if _, ok := r.Annotations[wpanic]; !ok && AutoscalerConfig != nil {
+				r.Annotations[wpanic] = asString(current.WindowPanicPercentage)
+			}
+			if _, ok := r.Annotations[tpanic]; !ok && AutoscalerConfig != nil {
+				r.Annotations[tpanic] = asString(current.TargetPanicPercentage)
+			}
 		}
 	case autoscaling.HPA:
 		if _, ok := r.Annotations[autoscaling.MetricAnnotationKey]; !ok {
 			r.Annotations[autoscaling.MetricAnnotationKey] = autoscaling.CPU
 		}
 	}
+}
+
+func asString(v float64) string {
+	return strconv.FormatFloat(v, 'E', -1, 64)
 }
 
 func (rs *PodAutoscalerSpec) SetDefaults() {

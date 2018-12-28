@@ -20,17 +20,16 @@ import (
 	"flag"
 	"log"
 
-	"go.uber.org/zap"
-
 	"github.com/knative/pkg/configmap"
 	"github.com/knative/pkg/logging/logkey"
 	"github.com/knative/pkg/signals"
 	"github.com/knative/pkg/webhook"
-	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
+	pa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	net "github.com/knative/serving/pkg/apis/networking/v1alpha1"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
 	"github.com/knative/serving/pkg/logging"
 	"github.com/knative/serving/pkg/system"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -72,6 +71,19 @@ func main() {
 	// Watch the logging config map and dynamically update logging levels.
 	configMapWatcher := configmap.NewInformedWatcher(kubeClient, system.Namespace)
 	configMapWatcher.Watch(logging.ConfigName, logging.UpdateLevelFromConfigMap(logger, atomicLevel, component))
+
+	// Watch the autoscaler config map and dynamically update autoscaler config.
+	rawConfig, err := configmap.Load("/etc/config-autoscaler")
+	if err != nil {
+		logger.Fatalf("Error reading autoscaler configuration: %v", err)
+	}
+	dynConfig, err := autoscaler.NewDynamicConfigFromMap(rawConfig, logger)
+	if err != nil {
+		logger.Fatalf("Error parsing autoscaler configuration: %v", err)
+	}
+	pa.AutoscalerConfig = dynConfig
+	configMapWatcher.Watch(autoscaler.ConfigName, dynConfig.Update)
+
 	if err = configMapWatcher.Start(stopCh); err != nil {
 		logger.Fatalf("failed to start configuration manager: %v", err)
 	}
@@ -92,7 +104,7 @@ func main() {
 			v1alpha1.SchemeGroupVersion.WithKind("Configuration"): &v1alpha1.Configuration{},
 			v1alpha1.SchemeGroupVersion.WithKind("Route"):         &v1alpha1.Route{},
 			v1alpha1.SchemeGroupVersion.WithKind("Service"):       &v1alpha1.Service{},
-			kpa.SchemeGroupVersion.WithKind("PodAutoscaler"):      &kpa.PodAutoscaler{},
+			pa.SchemeGroupVersion.WithKind("PodAutoscaler"):       &kpa.PodAutoscaler{},
 			net.SchemeGroupVersion.WithKind("ClusterIngress"):     &net.ClusterIngress{},
 		},
 		Logger: logger,

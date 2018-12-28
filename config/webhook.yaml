@@ -49,7 +49,12 @@ spec:
         volumeMounts:
         - name: config-logging
           mountPath: /etc/config-logging
+        - name: config-autoscaler
+          mountPath: /etc/config-autoscaler
       volumes:
         - name: config-logging
           configMap:
             name: config-logging
+        - name: config-autoscaler
+          configMap:
+            name: config-autoscaler

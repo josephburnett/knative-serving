@@ -28,6 +28,7 @@ import (
 	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
 	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	fakeKna "github.com/knative/serving/pkg/client/clientset/versioned/fake"
 	informers "github.com/knative/serving/pkg/client/informers/externalversions"
 	"github.com/knative/serving/pkg/reconciler"
@@ -51,6 +52,8 @@ var (
 		"container-concurrency-target-default":    "10.0",
 		"stable-window":                           "5m",
 		"panic-window":                            "10s",
+		"window-panic-percentage":                 "10.0",
+		"target-panic-percentage":                 "200.0",
 		"scale-to-zero-grace-period":              gracePeriod.String(),
 		"tick-interval":                           "2s",
 	}
@@ -60,14 +63,14 @@ func newConfigWatcher() configmap.Watcher {
 	return configmap.NewStaticWatcher(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: system.Namespace,
-			Name:      autoscaler.ConfigName,
+			Name:      autoscalerConfig.ConfigName,
 		},
 		Data: configMapData,
 	})
 }
 
-func newDynamicConfig(t *testing.T) *autoscaler.DynamicConfig {
-	dynConfig, err := autoscaler.NewDynamicConfigFromMap(configMapData, TestLogger(t))
+func newDynamicConfig(t *testing.T) *autoscalerConfig.DynamicConfig {
+	dynConfig, err := autoscalerConfig.NewDynamicConfigFromMap(configMapData, TestLogger(t))
 	if err != nil {
 		t.Errorf("Error creating DynamicConfig: %v", err)
 	}

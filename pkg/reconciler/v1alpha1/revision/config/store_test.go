@@ -22,9 +22,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	"github.com/knative/serving/pkg/logging"
-
 	. "github.com/knative/serving/pkg/reconciler/v1alpha1/testing"
 )
 
@@ -35,13 +34,13 @@ func TestStoreLoadWithContext(t *testing.T) {
 	networkConfig := ConfigMapFromTestFile(t, NetworkConfigName)
 	observabilityConfig := ConfigMapFromTestFile(t, ObservabilityConfigName)
 	loggingConfig := ConfigMapFromTestFile(t, logging.ConfigName)
-	autoscalerConfig := ConfigMapFromTestFile(t, autoscaler.ConfigName)
+	asConfig := ConfigMapFromTestFile(t, autoscalerConfig.ConfigName)
 
 	store.OnConfigChanged(controllerConfig)
 	store.OnConfigChanged(networkConfig)
 	store.OnConfigChanged(observabilityConfig)
 	store.OnConfigChanged(loggingConfig)
-	store.OnConfigChanged(autoscalerConfig)
+	store.OnConfigChanged(asConfig)
 
 	config := FromContext(store.ToContext(context.Background()))
 
@@ -74,7 +73,7 @@ func TestStoreLoadWithContext(t *testing.T) {
 	})
 
 	t.Run("autoscaler", func(t *testing.T) {
-		expected, _ := autoscaler.NewConfigFromConfigMap(autoscalerConfig)
+		expected, _ := autoscalerConfig.NewConfigFromConfigMap(asConfig)
 		if diff := cmp.Diff(expected, config.Autoscaler); diff != "" {
 			t.Errorf("Unexpected autoscaler config (-want, +got): %v", diff)
 		}
@@ -88,7 +87,7 @@ func TestStoreImmutableConfig(t *testing.T) {
 	store.OnConfigChanged(ConfigMapFromTestFile(t, NetworkConfigName))
 	store.OnConfigChanged(ConfigMapFromTestFile(t, ObservabilityConfigName))
 	store.OnConfigChanged(ConfigMapFromTestFile(t, logging.ConfigName))
-	store.OnConfigChanged(ConfigMapFromTestFile(t, autoscaler.ConfigName))
+	store.OnConfigChanged(ConfigMapFromTestFile(t, autoscalerConfig.ConfigName))
 
 	config := store.Load()
 

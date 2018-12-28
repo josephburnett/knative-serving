@@ -20,11 +20,6 @@ import (
 	"fmt"
 	"testing"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	fakekubeclientset "k8s.io/client-go/kubernetes/fake"
-	clientgotesting "k8s.io/client-go/testing"
-
 	"github.com/knative/pkg/controller"
 	"github.com/knative/pkg/kmeta"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
@@ -32,6 +27,10 @@ import (
 	informers "github.com/knative/serving/pkg/client/informers/externalversions"
 	"github.com/knative/serving/pkg/reconciler"
 	. "github.com/knative/serving/pkg/reconciler/v1alpha1/testing"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	fakekubeclientset "k8s.io/client-go/kubernetes/fake"
+	clientgotesting "k8s.io/client-go/testing"
 )
 
 // This is heavily based on the way the OpenShift Ingress controller tests its reconciliation method.

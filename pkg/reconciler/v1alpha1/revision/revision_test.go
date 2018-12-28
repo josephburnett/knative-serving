@@ -40,7 +40,7 @@ import (
 	kpav1alpha1 "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
-	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	fakeclientset "github.com/knative/serving/pkg/client/clientset/versioned/fake"
 	informers "github.com/knative/serving/pkg/client/informers/externalversions"
 	"github.com/knative/serving/pkg/logging"
@@ -48,6 +48,7 @@ import (
 	"github.com/knative/serving/pkg/reconciler/v1alpha1/revision/config"
 	"github.com/knative/serving/pkg/reconciler/v1alpha1/revision/resources"
 	resourcenames "github.com/knative/serving/pkg/reconciler/v1alpha1/revision/resources/names"
+	. "github.com/knative/serving/pkg/reconciler/v1alpha1/testing"
 	"github.com/knative/serving/pkg/system"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -57,8 +58,6 @@ import (
 	fakedynamic "k8s.io/client-go/dynamic/fake"
 	kubeinformers "k8s.io/client-go/informers"
 	fakekubeclientset "k8s.io/client-go/kubernetes/fake"
-
-	. "github.com/knative/serving/pkg/reconciler/v1alpha1/testing"
 )
 
 func getTestConfiguration() *v1alpha1.Configuration {
@@ -201,7 +200,7 @@ func newTestControllerWithConfig(t *testing.T, controllerConfig *config.Controll
 	}, &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: system.Namespace,
-			Name:      autoscaler.ConfigName,
+			Name:      autoscalerConfig.ConfigName,
 		},
 		Data: map[string]string{
 			"max-scale-up-rate":                       "1.0",
@@ -209,6 +208,8 @@ func newTestControllerWithConfig(t *testing.T, controllerConfig *config.Controll
 			"container-concurrency-target-default":    "10.0",
 			"stable-window":                           "5m",
 			"panic-window":                            "10s",
+			"window-panic-percentage":                 "10.0",
+			"target-panic-percentage":                 "200.0",
 			"tick-interval":                           "2s",
 		},
 	},

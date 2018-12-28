@@ -28,12 +28,13 @@ import (
 	ctrl "github.com/knative/pkg/controller"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
-	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	fakeclientset "github.com/knative/serving/pkg/client/clientset/versioned/fake"
 	informers "github.com/knative/serving/pkg/client/informers/externalversions"
 	"github.com/knative/serving/pkg/logging"
 	rclr "github.com/knative/serving/pkg/reconciler"
 	"github.com/knative/serving/pkg/reconciler/v1alpha1/revision/config"
+	. "github.com/knative/serving/pkg/reconciler/v1alpha1/testing"
 	"github.com/knative/serving/pkg/system"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
@@ -42,8 +43,6 @@ import (
 	fakedynamicclientset "k8s.io/client-go/dynamic/fake"
 	kubeinformers "k8s.io/client-go/informers"
 	fakekubeclientset "k8s.io/client-go/kubernetes/fake"
-
-	. "github.com/knative/serving/pkg/reconciler/v1alpha1/testing"
 )
 
 type nopResolver struct{}
@@ -208,7 +207,7 @@ func newTestController(t *testing.T, stopCh <-chan struct{}, servingObjects ...r
 			}}, {
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: system.Namespace,
-				Name:      autoscaler.ConfigName,
+				Name:      autoscalerConfig.ConfigName,
 			},
 			Data: map[string]string{
 				"max-scale-up-rate":                       "1.0",
@@ -216,6 +215,8 @@ func newTestController(t *testing.T, stopCh <-chan struct{}, servingObjects ...r
 				"container-concurrency-target-default":    "10.0",
 				"stable-window":                           "5m",
 				"panic-window":                            "10s",
+				"window-panic-percentage":                 "10.0",
+				"target-panic-percentage":                 "200.0",
 				"scale-to-zero-threshold":                 "10m",
 				"tick-interval":                           "2s",
 			}},

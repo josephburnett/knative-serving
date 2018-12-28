@@ -24,7 +24,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/knative/pkg/logging"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
-	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	"github.com/knative/serving/pkg/reconciler/v1alpha1/revision/config"
 	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
@@ -39,7 +39,7 @@ func TestMakeQueueContainer(t *testing.T) {
 		name     string
 		rev      *v1alpha1.Revision
 		lc       *logging.Config
-		ac       *autoscaler.Config
+		ac       *autoscalerConfig.Config
 		cc       *config.Controller
 		userport *corev1.ContainerPort
 		want     *corev1.Container
@@ -57,7 +57,7 @@ func TestMakeQueueContainer(t *testing.T) {
 			},
 		},
 		lc: &logging.Config{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		userport: &corev1.ContainerPort{
 			Name:          userPortEnvName,
@@ -122,7 +122,7 @@ func TestMakeQueueContainer(t *testing.T) {
 			},
 		},
 		lc: &logging.Config{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{
 			QueueSidecarImage: "alpine",
 		},
@@ -197,7 +197,7 @@ func TestMakeQueueContainer(t *testing.T) {
 			},
 		},
 		lc: &logging.Config{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		userport: &corev1.ContainerPort{
 			Name:          userPortEnvName,
@@ -267,7 +267,7 @@ func TestMakeQueueContainer(t *testing.T) {
 				"queueproxy": zapcore.ErrorLevel,
 			},
 		},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		userport: &corev1.ContainerPort{
 			Name:          userPortEnvName,
@@ -332,7 +332,7 @@ func TestMakeQueueContainer(t *testing.T) {
 			},
 		},
 		lc: &logging.Config{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		userport: &corev1.ContainerPort{
 			Name:          userPortEnvName,

@@ -25,7 +25,7 @@ import (
 	"github.com/knative/pkg/logging"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
-	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	"github.com/knative/serving/pkg/queue"
 	"github.com/knative/serving/pkg/reconciler/v1alpha1/revision/config"
 	appsv1 "k8s.io/api/apps/v1"
@@ -51,7 +51,7 @@ func TestMakePodSpec(t *testing.T) {
 		rev  *v1alpha1.Revision
 		lc   *logging.Config
 		oc   *config.Observability
-		ac   *autoscaler.Config
+		ac   *autoscalerConfig.Config
 		cc   *config.Controller
 		want *corev1.PodSpec
 	}{{
@@ -78,7 +78,7 @@ func TestMakePodSpec(t *testing.T) {
 		},
 		lc: &logging.Config{},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &corev1.PodSpec{
 			Containers: []corev1.Container{{
@@ -171,7 +171,7 @@ func TestMakePodSpec(t *testing.T) {
 		},
 		lc: &logging.Config{},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &corev1.PodSpec{
 			Containers: []corev1.Container{{
@@ -261,7 +261,7 @@ func TestMakePodSpec(t *testing.T) {
 		},
 		lc: &logging.Config{},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &corev1.PodSpec{
 			Containers: []corev1.Container{{
@@ -355,7 +355,7 @@ func TestMakePodSpec(t *testing.T) {
 		},
 		lc: &logging.Config{},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &corev1.PodSpec{
 			Containers: []corev1.Container{{
@@ -450,7 +450,7 @@ func TestMakePodSpec(t *testing.T) {
 		},
 		lc: &logging.Config{},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &corev1.PodSpec{
 			Containers: []corev1.Container{{
@@ -552,7 +552,7 @@ func TestMakePodSpec(t *testing.T) {
 		},
 		lc: &logging.Config{},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &corev1.PodSpec{
 			Containers: []corev1.Container{{
@@ -653,7 +653,7 @@ func TestMakePodSpec(t *testing.T) {
 		},
 		lc: &logging.Config{},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &corev1.PodSpec{
 			Containers: []corev1.Container{{
@@ -754,7 +754,7 @@ func TestMakePodSpec(t *testing.T) {
 		},
 		lc: &logging.Config{},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &corev1.PodSpec{
 			Containers: []corev1.Container{{
@@ -851,7 +851,7 @@ func TestMakePodSpec(t *testing.T) {
 			EnableVarLogCollection: true,
 			FluentdSidecarImage:    "indiana:jones",
 		},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &corev1.PodSpec{
 			Containers: []corev1.Container{{
@@ -993,7 +993,7 @@ func TestMakePodSpec(t *testing.T) {
 		},
 		lc: &logging.Config{},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &corev1.PodSpec{
 			Containers: []corev1.Container{{
@@ -1103,7 +1103,7 @@ func TestMakeDeployment(t *testing.T) {
 		lc   *logging.Config
 		nc   *config.Network
 		oc   *config.Observability
-		ac   *autoscaler.Config
+		ac   *autoscalerConfig.Config
 		cc   *config.Controller
 		want *appsv1.Deployment
 	}{{
@@ -1125,7 +1125,7 @@ func TestMakeDeployment(t *testing.T) {
 		lc: &logging.Config{},
 		nc: &config.Network{},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1197,7 +1197,7 @@ func TestMakeDeployment(t *testing.T) {
 		lc: &logging.Config{},
 		nc: &config.Network{},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1264,7 +1264,7 @@ func TestMakeDeployment(t *testing.T) {
 			IstioOutboundIPRanges: "*",
 		},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1335,7 +1335,7 @@ func TestMakeDeployment(t *testing.T) {
 			IstioOutboundIPRanges: "*",
 		},
 		oc: &config.Observability{},
-		ac: &autoscaler.Config{},
+		ac: &autoscalerConfig.Config{},
 		cc: &config.Controller{},
 		want: &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{

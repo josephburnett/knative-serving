@@ -26,6 +26,7 @@ import (
 	"github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	serving "github.com/knative/serving/pkg/apis/serving/v1alpha1"
 	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	. "github.com/knative/serving/pkg/reconciler/v1alpha1/testing"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -97,6 +98,7 @@ func metric(options ...MetricOption) *autoscaler.Metric {
 		},
 		Spec: autoscaler.MetricSpec{
 			TargetConcurrency: float64(100),
+			Window:            time.Second * 60,
 		},
 	}
 	for _, fn := range options {
@@ -119,13 +121,15 @@ func withTargetAnnotation(target string) MetricOption {
 	}
 }
 
-var config = &autoscaler.Config{
+var config = &autoscalerConfig.Config{
 	EnableScaleToZero:                    true,
 	ContainerConcurrencyTargetPercentage: 1.0,
 	ContainerConcurrencyTargetDefault:    100.0,
 	MaxScaleUpRate:                       10.0,
 	StableWindow:                         60 * time.Second,
 	PanicWindow:                          6 * time.Second,
+	WindowPanicPercentage:                10.0,
+	TargetPanicPercentage:                200.0,
 	TickInterval:                         2 * time.Second,
 	ScaleToZeroGracePeriod:               30 * time.Second,
 }

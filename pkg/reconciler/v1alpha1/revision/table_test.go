@@ -27,7 +27,7 @@ import (
 	"github.com/knative/pkg/logging"
 	autoscalingv1alpha1 "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
-	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	"github.com/knative/serving/pkg/reconciler"
 	rtesting "github.com/knative/serving/pkg/reconciler/testing"
 	"github.com/knative/serving/pkg/reconciler/v1alpha1/revision/config"
@@ -892,7 +892,7 @@ func ReconcilerTestConfig() *config.Config {
 			LoggingURLTemplate: "http://logger.io/${REVISION_UID}",
 		},
 		Logging:    &logging.Config{},
-		Autoscaler: &autoscaler.Config{},
+		Autoscaler: &autoscalerConfig.Config{},
 	}
 }
 

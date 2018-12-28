@@ -22,6 +22,7 @@ import (
 	"time"
 
 	. "github.com/knative/pkg/logging/testing"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	"go.uber.org/zap"
 )
 
@@ -556,7 +557,7 @@ func newTestAutoscaler(containerConcurrency int) *Autoscaler {
 	stableWindow := 60 * time.Second
 	panicWindow := 6 * time.Second
 	scaleToZeroGracePeriod := 30 * time.Second
-	config := &Config{
+	config := &autoscalerConfig.Config{
 		ContainerConcurrencyTargetPercentage: 1.0, // targeting 100% makes the test easier to read
 		ContainerConcurrencyTargetDefault:    10.0,
 		MaxScaleUpRate:                       10.0,
@@ -565,10 +566,7 @@ func newTestAutoscaler(containerConcurrency int) *Autoscaler {
 		ScaleToZeroGracePeriod:               scaleToZeroGracePeriod,
 	}
 
-	dynConfig := &DynamicConfig{
-		config: config,
-		logger: zap.NewNop().Sugar(),
-	}
+	dynConfig := autoscalerConfig.NewDynamicConfig(config, zap.NewNop().Sugar())
 	return New(dynConfig, MetricSpec{
 		TargetConcurrency: float64(containerConcurrency),
 		Window:            stableWindow,

@@ -26,6 +26,7 @@ import (
 	. "github.com/knative/pkg/logging/testing"
 	kpa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -38,7 +39,7 @@ const (
 
 func TestMultiScalerScaling(t *testing.T) {
 	ctx := context.TODO()
-	ms, stopCh, uniScaler := createMultiScaler(t, &autoscaler.Config{
+	ms, stopCh, uniScaler := createMultiScaler(t, &autoscalerConfig.Config{
 		TickInterval: time.Millisecond * 1,
 	})
 	defer close(stopCh)
@@ -111,7 +112,7 @@ func TestMultiScalerScaling(t *testing.T) {
 
 func TestMultiScalerScaleToZero(t *testing.T) {
 	ctx := context.TODO()
-	ms, stopCh, uniScaler := createMultiScaler(t, &autoscaler.Config{
+	ms, stopCh, uniScaler := createMultiScaler(t, &autoscalerConfig.Config{
 		TickInterval:      time.Millisecond * 1,
 		EnableScaleToZero: true,
 	})
@@ -176,7 +177,7 @@ func TestMultiScalerScaleToZero(t *testing.T) {
 
 func TestMultiScalerWithoutScaleToZero(t *testing.T) {
 	ctx := context.TODO()
-	ms, stopCh, uniScaler := createMultiScaler(t, &autoscaler.Config{
+	ms, stopCh, uniScaler := createMultiScaler(t, &autoscalerConfig.Config{
 		TickInterval:      time.Millisecond * 1,
 		EnableScaleToZero: false,
 	})
@@ -228,7 +229,7 @@ func TestMultiScalerWithoutScaleToZero(t *testing.T) {
 
 func TestMultiScalerIgnoreNegativeScale(t *testing.T) {
 	ctx := context.TODO()
-	ms, stopCh, uniScaler := createMultiScaler(t, &autoscaler.Config{
+	ms, stopCh, uniScaler := createMultiScaler(t, &autoscalerConfig.Config{
 		TickInterval:      time.Millisecond * 1,
 		EnableScaleToZero: true,
 	})
@@ -280,7 +281,7 @@ func TestMultiScalerIgnoreNegativeScale(t *testing.T) {
 
 func TestMultiScalerRecordsStatistics(t *testing.T) {
 	ctx := context.TODO()
-	ms, stopCh, uniScaler := createMultiScaler(t, &autoscaler.Config{
+	ms, stopCh, uniScaler := createMultiScaler(t, &autoscalerConfig.Config{
 		TickInterval: time.Millisecond * 1,
 	})
 	defer close(stopCh)
@@ -323,7 +324,7 @@ func TestMultiScalerRecordsStatistics(t *testing.T) {
 
 func TestMultiScalerUpdate(t *testing.T) {
 	ctx := context.TODO()
-	ms, stopCh, uniScaler := createMultiScaler(t, &autoscaler.Config{
+	ms, stopCh, uniScaler := createMultiScaler(t, &autoscalerConfig.Config{
 		TickInterval:      time.Millisecond,
 		EnableScaleToZero: false,
 	})
@@ -360,12 +361,12 @@ func TestMultiScalerUpdate(t *testing.T) {
 	}
 }
 
-func createMultiScaler(t *testing.T, config *autoscaler.Config) (*autoscaler.MultiScaler, chan<- struct{}, *fakeUniScaler) {
+func createMultiScaler(t *testing.T, config *autoscalerConfig.Config) (*autoscaler.MultiScaler, chan<- struct{}, *fakeUniScaler) {
 	logger := TestLogger(t)
 	uniscaler := &fakeUniScaler{}
 
 	stopChan := make(chan struct{})
-	ms := autoscaler.NewMultiScaler(autoscaler.NewDynamicConfig(config, logger),
+	ms := autoscaler.NewMultiScaler(autoscalerConfig.NewDynamicConfig(config, logger),
 		stopChan, uniscaler.fakeUniScalerFactory, logger)
 
 	return ms, stopChan, uniscaler
@@ -378,7 +379,7 @@ type fakeUniScaler struct {
 	lastStat autoscaler.Stat
 }
 
-func (u *fakeUniScaler) fakeUniScalerFactory(*autoscaler.Metric, *autoscaler.DynamicConfig) (autoscaler.UniScaler, error) {
+func (u *fakeUniScaler) fakeUniScalerFactory(*autoscaler.Metric, *autoscalerConfig.DynamicConfig) (autoscaler.UniScaler, error) {
 	return u, nil
 }
 

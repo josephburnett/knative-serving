@@ -25,7 +25,7 @@ import (
 	"github.com/knative/pkg/logging"
 	pav1alpha1 "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
-	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	clientset "github.com/knative/serving/pkg/client/clientset/versioned"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -44,7 +44,7 @@ type kpaScaler struct {
 
 	// autoscalerConfig could change over time and access to it
 	// must go through autoscalerConfigMutex
-	autoscalerConfig      *autoscaler.Config
+	autoscalerConfig      *autoscalerConfig.Config
 	autoscalerConfigMutex sync.Mutex
 }
 
@@ -58,13 +58,13 @@ func NewKPAScaler(servingClientSet clientset.Interface, scaleClientSet scale.Sca
 	}
 
 	// Watch for config changes.
-	configMapWatcher.Watch(autoscaler.ConfigName, ks.receiveAutoscalerConfig)
+	configMapWatcher.Watch(autoscalerConfig.ConfigName, ks.receiveAutoscalerConfig)
 
 	return ks
 }
 
 func (ks *kpaScaler) receiveAutoscalerConfig(configMap *corev1.ConfigMap) {
-	newAutoscalerConfig, err := autoscaler.NewConfigFromConfigMap(configMap)
+	newAutoscalerConfig, err := autoscalerConfig.NewConfigFromConfigMap(configMap)
 	ks.autoscalerConfigMutex.Lock()
 	defer ks.autoscalerConfigMutex.Unlock()
 	if err != nil {
@@ -79,7 +79,7 @@ func (ks *kpaScaler) receiveAutoscalerConfig(configMap *corev1.ConfigMap) {
 	ks.autoscalerConfig = newAutoscalerConfig
 }
 
-func (ks *kpaScaler) getAutoscalerConfig() *autoscaler.Config {
+func (ks *kpaScaler) getAutoscalerConfig() *autoscalerConfig.Config {
 	ks.autoscalerConfigMutex.Lock()
 	defer ks.autoscalerConfigMutex.Unlock()
 	return ks.autoscalerConfig.DeepCopy()

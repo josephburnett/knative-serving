@@ -27,6 +27,7 @@ import (
 	pa "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	net "github.com/knative/serving/pkg/apis/networking/v1alpha1"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	"github.com/knative/serving/pkg/logging"
 	"github.com/knative/serving/pkg/system"
 	"go.uber.org/zap"
@@ -77,12 +78,12 @@ func main() {
 	if err != nil {
 		logger.Fatalf("Error reading autoscaler configuration: %v", err)
 	}
-	dynConfig, err := autoscaler.NewDynamicConfigFromMap(rawConfig, logger)
+	dynConfig, err := autoscalerConfig.NewDynamicConfigFromMap(rawConfig, logger)
 	if err != nil {
 		logger.Fatalf("Error parsing autoscaler configuration: %v", err)
 	}
 	pa.AutoscalerConfig = dynConfig
-	configMapWatcher.Watch(autoscaler.ConfigName, dynConfig.Update)
+	configMapWatcher.Watch(autoscalerConfig.ConfigName, dynConfig.Update)
 
 	if err = configMapWatcher.Start(stopCh); err != nil {
 		logger.Fatalf("failed to start configuration manager: %v", err)
@@ -104,7 +105,7 @@ func main() {
 			v1alpha1.SchemeGroupVersion.WithKind("Configuration"): &v1alpha1.Configuration{},
 			v1alpha1.SchemeGroupVersion.WithKind("Route"):         &v1alpha1.Route{},
 			v1alpha1.SchemeGroupVersion.WithKind("Service"):       &v1alpha1.Service{},
-			pa.SchemeGroupVersion.WithKind("PodAutoscaler"):       &kpa.PodAutoscaler{},
+			pa.SchemeGroupVersion.WithKind("PodAutoscaler"):       &pa.PodAutoscaler{},
 			net.SchemeGroupVersion.WithKind("ClusterIngress"):     &net.ClusterIngress{},
 		},
 		Logger: logger,

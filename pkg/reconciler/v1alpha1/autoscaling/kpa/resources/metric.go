@@ -22,15 +22,16 @@ import (
 	"github.com/knative/pkg/logging"
 	"github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 )
 
 // MakeMetric constructs a Metric resource from a PodAutoscaler taking
 // into account the PA's ContainerConcurrency and the relevant
 // autoscaling annotation.
-func MakeMetric(ctx context.Context, pa *v1alpha1.PodAutoscaler, config *autoscaler.Config) *autoscaler.Metric {
+func MakeMetric(ctx context.Context, pa *v1alpha1.PodAutoscaler, config *autoscalerConfig.Config) *autoscaler.Metric {
 	logger := logging.FromContext(ctx)
 
-	target := config.TargetConcurrency(pa.Spec.ContainerConcurrency)
+	target := config.TargetConcurrency(float64(pa.Spec.ContainerConcurrency))
 	if mt, ok := pa.MetricTarget(); ok {
 		annotationTarget := float64(mt)
 		if target != 0 && annotationTarget > target {

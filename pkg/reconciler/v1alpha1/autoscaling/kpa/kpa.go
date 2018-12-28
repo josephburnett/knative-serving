@@ -27,6 +27,7 @@ import (
 	pav1alpha1 "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	informers "github.com/knative/serving/pkg/client/informers/externalversions/autoscaling/v1alpha1"
 	listers "github.com/knative/serving/pkg/client/listers/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/reconciler"
@@ -78,7 +79,7 @@ type Reconciler struct {
 	endpointsLister corev1listers.EndpointsLister
 	kpaMetrics      KPAMetrics
 	kpaScaler       KPAScaler
-	dynConfig       *autoscaler.DynamicConfig
+	dynConfig       *autoscalerConfig.DynamicConfig
 }
 
 // Check that our Reconciler implements controller.Reconciler
@@ -91,7 +92,7 @@ func NewController(
 	endpointsInformer corev1informers.EndpointsInformer,
 	kpaMetrics KPAMetrics,
 	kpaScaler KPAScaler,
-	dynConfig *autoscaler.DynamicConfig,
+	dynConfig *autoscalerConfig.DynamicConfig,
 ) *controller.Impl {
 
 	c := &Reconciler{

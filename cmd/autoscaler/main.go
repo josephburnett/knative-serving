@@ -25,6 +25,7 @@ import (
 	"github.com/knative/pkg/signals"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/autoscaler"
+	config "github.com/knative/serving/pkg/autoscaler/config"
 	"github.com/knative/serving/pkg/autoscaler/statserver"
 	clientset "github.com/knative/serving/pkg/client/clientset/versioned"
 	informers "github.com/knative/serving/pkg/client/informers/externalversions"
@@ -111,12 +112,12 @@ func main() {
 	if err != nil {
 		logger.Fatalf("Error reading autoscaler configuration: %v", err)
 	}
-	dynConfig, err := autoscaler.NewDynamicConfigFromMap(rawConfig, logger)
+	dynConfig, err := config.NewDynamicConfigFromMap(rawConfig, logger)
 	if err != nil {
 		logger.Fatalf("Error parsing autoscaler configuration: %v", err)
 	}
 	// Watch the autoscaler config map and dynamically update autoscaler config.
-	configMapWatcher.Watch(autoscaler.ConfigName, dynConfig.Update)
+	configMapWatcher.Watch(config.ConfigName, dynConfig.Update)
 
 	multiScaler := autoscaler.NewMultiScaler(dynConfig, stopCh, uniScalerFactory, logger)
 
@@ -210,7 +211,7 @@ func buildRESTMapper(kubeClientSet kubernetes.Interface, stopCh <-chan struct{})
 	return rm
 }
 
-func uniScalerFactory(metric *autoscaler.Metric, dynamicConfig *autoscaler.DynamicConfig) (autoscaler.UniScaler, error) {
+func uniScalerFactory(metric *autoscaler.Metric, dynamicConfig *config.DynamicConfig) (autoscaler.UniScaler, error) {
 	// Create a stats reporter which tags statistics by PA namespace, configuration name, and PA name.
 	reporter, err := autoscaler.NewStatsReporter(metric.Namespace,
 		labelValueOrEmpty(metric, serving.ServiceLabelKey), labelValueOrEmpty(metric, serving.ConfigurationLabelKey), metric.Name)
@@ -218,7 +219,7 @@ func uniScalerFactory(metric *autoscaler.Metric, dynamicConfig *autoscaler.Dynam
 		return nil, err
 	}
 
-	return autoscaler.New(dynamicConfig, metric.Spec.TargetConcurrency, reporter), nil
+	return autoscaler.New(dynamicConfig, metric.Spec, reporter), nil
 }
 
 func labelValueOrEmpty(metric *autoscaler.Metric, labelKey string) string {

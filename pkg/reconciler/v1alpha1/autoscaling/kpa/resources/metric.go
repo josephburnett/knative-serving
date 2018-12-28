@@ -52,11 +52,11 @@ func MakeMetric(ctx context.Context, pa *v1alpha1.PodAutoscaler, config *autosca
 	}
 	windowPanic := config.PanicWindow
 	if p, ok := pa.WindowPanicPercentage(); ok {
-		windowPanic = time.Duration(float64(window) * p)
+		windowPanic = time.Duration(float64(window) * p / 100.0)
 	}
 	targetPanic := target * 2.0
 	if p, ok := pa.TargetPanicPercentage(); ok {
-		targetPanic = target * p
+		targetPanic = target * p / 100.0
 	}
 
 	return &autoscaler.Metric{

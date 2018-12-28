@@ -42,31 +42,65 @@ func TestMakeMetric(t *testing.T) {
 		want: metric(),
 	}, {
 		name: "with container concurrency 1",
-		pa:   pa(WithContainerConcurrency(1)),
+		pa: pa(
+			WithContainerConcurrency(1)),
 		want: metric(
 			withTarget(1.0),
 			withTargetPanic(2.0)),
 	}, {
 		name: "with target annotation 1",
-		pa:   pa(WithTargetAnnotation("1")),
+		pa: pa(
+			WithTargetAnnotation("1")),
 		want: metric(
 			withTarget(1.0),
 			withTargetPanic(2.0),
 			withTargetAnnotation("1")),
 	}, {
 		name: "with container concurrency greater than target annotation (ok)",
-		pa:   pa(WithContainerConcurrency(10), WithTargetAnnotation("1")),
+		pa: pa(
+			WithContainerConcurrency(10),
+			WithTargetAnnotation("1")),
 		want: metric(
 			withTarget(1.0),
 			withTargetPanic(2.0),
 			withTargetAnnotation("1")),
 	}, {
 		name: "with target annotation greater than container concurrency (ignore annotation for safety)",
-		pa:   pa(WithContainerConcurrency(1), WithTargetAnnotation("10")),
+		pa: pa(
+			WithContainerConcurrency(1),
+			WithTargetAnnotation("10")),
 		want: metric(
 			withTarget(1.0),
 			withTargetPanic(2.0),
 			withTargetAnnotation("10")),
+	}, {
+		name: "with longer window, no panic percentage (defaults to backward-compatible 6s)",
+		pa: pa(
+			WithWindowAnnotation("120s")),
+		want: metric(
+			withWindow(120*time.Second),
+			withWindowPanic(6*time.Second),
+			withWindowAnnotation("120s")),
+	}, {
+		name: "with longer window, default panic percentage of 10%",
+		pa: pa(
+			WithWindowAnnotation("120s"),
+			WithWindowPanicPercentageAnnotation("10.0")),
+		want: metric(
+			withWindow(120*time.Second),
+			withWindowPanic(12*time.Second),
+			withWindowAnnotation("120s"),
+			withWindowPanicPercentageAnnotation("10.0")),
+	}, {
+		name: "with higher panic target",
+		pa: pa(
+			WithTargetAnnotation("1"),
+			WithTargetPanicPercentageAnnotation("400.0")),
+		want: metric(
+			withTarget(1.0),
+			withTargetPanic(4.0),
+			withTargetAnnotation("1"),
+			withTargetPanicPercentageAnnotation("400.0")),
 	}}
 
 	for _, tc := range cases {
@@ -149,6 +183,24 @@ func withWindowPanic(window time.Duration) MetricOption {
 func withTargetAnnotation(target string) MetricOption {
 	return func(metric *autoscaler.Metric) {
 		metric.Annotations[autoscaling.TargetAnnotationKey] = target
+	}
+}
+
+func withWindowAnnotation(window string) MetricOption {
+	return func(metric *autoscaler.Metric) {
+		metric.Annotations[autoscaling.WindowAnnotationKey] = window
+	}
+}
+
+func withTargetPanicPercentageAnnotation(percentage string) MetricOption {
+	return func(metric *autoscaler.Metric) {
+		metric.Annotations[autoscaling.TargetPanicPercentageAnnotationKey] = percentage
+	}
+}
+
+func withWindowPanicPercentageAnnotation(percentage string) MetricOption {
+	return func(metric *autoscaler.Metric) {
+		metric.Annotations[autoscaling.WindowPanicPercentageAnnotationKey] = percentage
 	}
 }
 

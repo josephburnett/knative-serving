@@ -639,26 +639,48 @@ func WithContainerConcurrency(cc int32) PodAutoscalerOption {
 	}
 }
 
-// WithTargetAnnotation returns a PodAutoscalerOption which sets
-// the PodAutoscaler autoscaling.knative.dev/target to the provided
-// value.
-func WithTargetAnnotation(target string) PodAutoscalerOption {
+func withAnnotationValue(key, value string) PodAutoscalerOption {
 	return func(pa *autoscalingv1alpha1.PodAutoscaler) {
 		if pa.Annotations == nil {
 			pa.Annotations = make(map[string]string)
 		}
-		pa.Annotations[autoscaling.TargetAnnotationKey] = target
+		pa.Annotations[key] = value
 	}
+}
+
+// WithTargetAnnotation returns a PodAutoscalerOption which sets
+// the PodAutoscaler autoscaling.knative.dev/target annotation to the
+// provided value.
+func WithTargetAnnotation(target string) PodAutoscalerOption {
+	return withAnnotationValue(autoscaling.TargetAnnotationKey, target)
+}
+
+// WithWindowAnnotation returns a PodAutoScalerOption which sets
+// the PodAutoscaler autoscaling.knative.dev/window annotation to the
+// provided value.
+func WithWindowAnnotation(window string) PodAutoscalerOption {
+	return withAnnotationValue(autoscaling.WindowAnnotationKey, window)
+}
+
+// WithTargetPanicPercentageAnnotation returns a PodAutoscalerOption
+// which sets the PodAutoscaler
+// autoscaling.knative.dev/targetPanicPercentage annotation to the
+// provided value.
+func WithTargetPanicPercentageAnnotation(percentage string) PodAutoscalerOption {
+	return withAnnotationValue(autoscaling.TargetPanicPercentageAnnotationKey, percentage)
+}
+
+// WithWindowPanicPercentageAnnotation retturn a PodAutoscalerOption
+// which set the PodAutoscaler
+// autoscaling.knative.dev/windowPanicPercentage annotation to the
+// provided value.
+func WithWindowPanicPercentageAnnotation(percentage string) PodAutoscalerOption {
+	return withAnnotationValue(autoscaling.WindowPanicPercentageAnnotationKey, percentage)
 }
 
 // WithMetricAnnotation adds a metric annotation to the PA.
 func WithMetricAnnotation(metric string) PodAutoscalerOption {
-	return func(pa *autoscalingv1alpha1.PodAutoscaler) {
-		if pa.Annotations == nil {
-			pa.Annotations = make(map[string]string)
-		}
-		pa.Annotations[autoscaling.MetricAnnotationKey] = metric
-	}
+	return withAnnotationValue(autoscaling.MetricAnnotationKey, metric)
 }
 
 // K8sServiceOption enables further configuration of the Kubernetes Service.

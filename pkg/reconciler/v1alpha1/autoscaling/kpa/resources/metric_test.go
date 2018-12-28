@@ -39,23 +39,34 @@ func TestMakeMetric(t *testing.T) {
 	}{{
 		name: "defaults",
 		pa:   pa(),
-		want: metric(withTarget(100.0)),
+		want: metric(),
 	}, {
 		name: "with container concurrency 1",
 		pa:   pa(WithContainerConcurrency(1)),
-		want: metric(withTarget(1.0)),
+		want: metric(
+			withTarget(1.0),
+			withTargetPanic(2.0)),
 	}, {
 		name: "with target annotation 1",
 		pa:   pa(WithTargetAnnotation("1")),
-		want: metric(withTarget(1.0), withTargetAnnotation("1")),
+		want: metric(
+			withTarget(1.0),
+			withTargetPanic(2.0),
+			withTargetAnnotation("1")),
 	}, {
 		name: "with container concurrency greater than target annotation (ok)",
 		pa:   pa(WithContainerConcurrency(10), WithTargetAnnotation("1")),
-		want: metric(withTarget(1.0), withTargetAnnotation("1")),
+		want: metric(
+			withTarget(1.0),
+			withTargetPanic(2.0),
+			withTargetAnnotation("1")),
 	}, {
 		name: "with target annotation greater than container concurrency (ignore annotation for safety)",
 		pa:   pa(WithContainerConcurrency(1), WithTargetAnnotation("10")),
-		want: metric(withTarget(1.0), withTargetAnnotation("10")),
+		want: metric(
+			withTarget(1.0),
+			withTargetPanic(2.0),
+			withTargetAnnotation("10")),
 	}}
 
 	for _, tc := range cases {
@@ -114,6 +125,24 @@ type MetricOption func(*autoscaler.Metric)
 func withTarget(target float64) MetricOption {
 	return func(metric *autoscaler.Metric) {
 		metric.Spec.TargetConcurrency = target
+	}
+}
+
+func withWindow(window time.Duration) MetricOption {
+	return func(metric *autoscaler.Metric) {
+		metric.Spec.Window = window
+	}
+}
+
+func withTargetPanic(target float64) MetricOption {
+	return func(metric *autoscaler.Metric) {
+		metric.Spec.TargetConcurrencyPanic = target
+	}
+}
+
+func withWindowPanic(window time.Duration) MetricOption {
+	return func(metric *autoscaler.Metric) {
+		metric.Spec.WindowPanic = window
 	}
 }
 

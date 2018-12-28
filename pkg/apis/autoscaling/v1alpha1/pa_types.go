@@ -141,6 +141,15 @@ func (pa *PodAutoscaler) annotationInt32(key string) int32 {
 	return 0
 }
 
+func (pa *PodAutoscaler) annotationFloat64(key string) (float64, bool) {
+	if s, ok := pa.Annotations[key]; ok {
+		if f, err := strconv.ParseFloat(s, 64); err != nil {
+			return f, true
+		}
+	}
+	return 0.0, false
+}
+
 // ScaleBounds returns scale bounds annotations values as a tuple:
 // `(min, max int32)`. The value of 0 for any of min or max means the bound is
 // not set
@@ -170,6 +179,16 @@ func (pa *PodAutoscaler) Window() (window time.Duration, ok bool) {
 		return d, true
 	}
 	return 0, false
+}
+
+// WindowPanicPercentage returns panic window annotation value or false if not present.
+func (pa *PodAutoscaler) WindowPanicPercentage() (percentage float64, ok bool) {
+	return pa.annotationFloat64(autoscaling.WindowPanicPercentageAnnotationKey)
+}
+
+// TargetPanicPercentage return the panic target annotation value or false if not present.
+func (pa *PodAutoscaler) TargetPanicPercentage() (percentage float64, ok bool) {
+	return pa.annotationFloat64(autoscaling.TargetPanicPercentageAnnotationKey)
 }
 
 // IsReady looks at the conditions and if the Status has a condition

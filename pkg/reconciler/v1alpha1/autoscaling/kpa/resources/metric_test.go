@@ -97,8 +97,10 @@ func metric(options ...MetricOption) *autoscaler.Metric {
 			},
 		},
 		Spec: autoscaler.MetricSpec{
-			TargetConcurrency: float64(100),
-			Window:            time.Second * 60,
+			TargetConcurrency:      float64(100),
+			TargetConcurrencyPanic: float64(200),
+			Window:                 time.Second * 60,
+			WindowPanic:            time.Second * 6,
 		},
 	}
 	for _, fn := range options {

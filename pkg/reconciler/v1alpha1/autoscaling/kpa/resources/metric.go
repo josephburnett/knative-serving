@@ -18,6 +18,7 @@ package resources
 
 import (
 	"context"
+	"time"
 
 	"github.com/knative/pkg/logging"
 	"github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
@@ -49,12 +50,22 @@ func MakeMetric(ctx context.Context, pa *v1alpha1.PodAutoscaler, config *autosca
 	if w, ok := pa.Window(); ok {
 		window = w
 	}
+	windowPanic := config.PanicWindow
+	if p, ok := pa.WindowPanicPercentage(); ok {
+		windowPanic = time.Duration(float64(window) * p)
+	}
+	targetPanic := target * 2.0
+	if p, ok := pa.TargetPanicPercentage(); ok {
+		targetPanic = target * p
+	}
 
 	return &autoscaler.Metric{
 		ObjectMeta: pa.ObjectMeta,
 		Spec: autoscaler.MetricSpec{
-			TargetConcurrency: target,
-			Window:            window,
+			TargetConcurrency:      target,
+			TargetConcurrencyPanic: targetPanic,
+			Window:                 window,
+			WindowPanic:            windowPanic,
 		},
 	}
 }

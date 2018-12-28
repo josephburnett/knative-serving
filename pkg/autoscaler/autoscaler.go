@@ -185,7 +185,9 @@ type Autoscaler struct {
 	*config.DynamicConfig
 	key          string
 	target       float64
+	targetPanic  float64
 	window       time.Duration
+	windowPanic  time.Duration
 	stats        map[statKey]Stat
 	statsMutex   sync.Mutex
 	panicking    bool
@@ -200,7 +202,9 @@ func New(dynamicConfig *config.DynamicConfig, spec MetricSpec, reporter StatsRep
 	return &Autoscaler{
 		DynamicConfig: dynamicConfig,
 		target:        spec.TargetConcurrency,
+		targetPanic:   spec.TargetConcurrencyPanic,
 		window:        spec.Window,
+		windowPanic:   spec.WindowPanic,
 		stats:         make(map[statKey]Stat),
 		reporter:      reporter,
 	}
@@ -211,7 +215,9 @@ func (a *Autoscaler) Update(spec MetricSpec) error {
 	a.targetMutex.Lock()
 	defer a.targetMutex.Unlock()
 	a.target = spec.TargetConcurrency
+	a.targetPanic = spec.TargetConcurrencyPanic
 	a.window = spec.Window
+	a.windowPanic = spec.WindowPanic
 	return nil
 }
 
@@ -242,8 +248,6 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	a.statsMutex.Lock()
 	defer a.statsMutex.Unlock()
 
-	config := a.Current()
-
 	// 60 second window
 	stableData := newTotalAggregation()
 
@@ -256,8 +260,8 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	// accumulate stats into their respective buckets
 	for key, stat := range a.stats {
 		instant := key.time
-		if instant.Add(config.PanicWindow).After(now) {
-			panicData.aggregate(config.PanicWindow, stat)
+		if instant.Add(a.windowPanic).After(now) {
+			panicData.aggregate(a.windowPanic, stat)
 		}
 		if instant.Add(a.window).After(now) {
 			stableData.aggregate(a.window, stat)
@@ -292,14 +296,14 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	logger.Debugf("Current QPS: %v  Current concurrent clients: %v", totalCurrentQPS, totalCurrentConcurrency)
 
 	observedStableConcurrencyPerPod := stableData.observedConcurrencyPerPod(a.window, now)
-	observedPanicConcurrencyPerPod := panicData.observedConcurrencyPerPod(config.PanicWindow, now)
+	observedPanicConcurrencyPerPod := panicData.observedConcurrencyPerPod(a.windowPanic, now)
 	// Desired scaling ratio is observed concurrency over desired (stable) concurrency.
 	// Rate limited to within MaxScaleUpRate.
 	desiredStableScalingRatio := a.rateLimited(observedStableConcurrencyPerPod / a.target)
 	desiredPanicScalingRatio := a.rateLimited(observedPanicConcurrencyPerPod / a.target)
 
 	desiredStablePodCount := desiredStableScalingRatio * stableData.observedPods(a.window, now)
-	desiredPanicPodCount := desiredPanicScalingRatio * stableData.observedPods(config.PanicWindow, now)
+	desiredPanicPodCount := desiredPanicScalingRatio * stableData.observedPods(a.windowPanic, now)
 
 	a.reporter.Report(ObservedPodCountM, float64(stableData.observedPods(a.window, now)))
 	a.reporter.Report(StableRequestConcurrencyM, observedStableConcurrencyPerPod)
@@ -309,7 +313,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	logger.Debugf("STABLE: Observed average %0.3f concurrency over %v seconds over %v samples over %v pods.",
 		observedStableConcurrencyPerPod, a.window, stableData.probeCount, stableData.observedPods(a.window, now))
 	logger.Debugf("PANIC: Observed average %0.3f concurrency over %v seconds over %v samples over %v pods.",
-		observedPanicConcurrencyPerPod, config.PanicWindow, panicData.probeCount, panicData.observedPods(config.PanicWindow, now))
+		observedPanicConcurrencyPerPod, a.windowPanic, panicData.probeCount, panicData.observedPods(a.windowPanic, now))
 
 	// Stop panicking after the surge has made its way into the stable metric.
 	if a.panicking && a.panicTime.Add(a.window).Before(now) {
@@ -321,7 +325,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	}
 
 	// Begin panicking when we cross the 6 second concurrency threshold.
-	if !a.panicking && panicData.observedPods(config.PanicWindow, now) > 0.0 && observedPanicConcurrencyPerPod >= (a.target*2) {
+	if !a.panicking && panicData.observedPods(a.windowPanic, now) > 0.0 && observedPanicConcurrencyPerPod >= (a.targetPanic) {
 		logger.Info("PANICKING")
 		a.reporter.Report(PanicM, 1)
 		a.panicking = true
@@ -333,7 +337,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	if a.panicking {
 		logger.Debug("Operating in panic mode.")
 		if desiredPanicPodCount > a.maxPanicPods {
-			logger.Infof("Increasing pods from %v to %v.", panicData.observedPods(config.PanicWindow, now), int(desiredPanicPodCount))
+			logger.Infof("Increasing pods from %v to %v.", panicData.observedPods(a.windowPanic, now), int(desiredPanicPodCount))
 			a.panicTime = &now
 			a.maxPanicPods = desiredPanicPodCount
 		}

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package autoscaler
+package config
 
 import (
 	"fmt"
@@ -47,7 +47,7 @@ type Config struct {
 	StableWindow          time.Duration
 	PanicWindow           time.Duration
 	WindowPanicPercentage float64
-	TargetPanicPercentage floag64
+	TargetPanicPercentage float64
 	TickInterval          time.Duration
 
 	ScaleToZeroGracePeriod time.Duration

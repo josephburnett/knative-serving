@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package autoscaler
+package config
 
 import (
 	"fmt"
@@ -24,9 +24,8 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func TestTargetConcurrency(t *testing.T) {
@@ -77,6 +76,8 @@ func TestNewConfig(t *testing.T) {
 			"container-concurrency-target-default":    "10.0",
 			"stable-window":                           "5m",
 			"panic-window":                            "10s",
+			"window-panic-percentage":                 "10.0",
+			"target-panic-percentage":                 "200.0",
 			"tick-interval":                           "2s",
 		},
 		want: &Config{
@@ -85,6 +86,8 @@ func TestNewConfig(t *testing.T) {
 			MaxScaleUpRate:                       1.0,
 			StableWindow:                         5 * time.Minute,
 			PanicWindow:                          10 * time.Second,
+			WindowPanicPercentage:                10.0,
+			TargetPanicPercentage:                200.0,
 			ScaleToZeroGracePeriod:               30 * time.Second,
 			TickInterval:                         2 * time.Second,
 		},
@@ -98,6 +101,8 @@ func TestNewConfig(t *testing.T) {
 			"container-concurrency-target-default":    "10.0",
 			"stable-window":                           "5m",
 			"panic-window":                            "10s",
+			"window-panic-percentage":                 "10.0",
+			"target-panic-percentage":                 "200.0",
 			"tick-interval":                           "2s",
 		},
 		want: &Config{
@@ -108,6 +113,8 @@ func TestNewConfig(t *testing.T) {
 			MaxScaleUpRate:                       1.0,
 			StableWindow:                         5 * time.Minute,
 			PanicWindow:                          10 * time.Second,
+			WindowPanicPercentage:                10.0,
+			TargetPanicPercentage:                200.0,
 			ScaleToZeroGracePeriod:               30 * time.Second,
 			TickInterval:                         2 * time.Second,
 		},
@@ -121,6 +128,8 @@ func TestNewConfig(t *testing.T) {
 			"container-concurrency-target-default":    "10.0",
 			"stable-window":                           "5m",
 			"panic-window":                            "10s",
+			"window-panic-percentage":                 "10.0",
+			"target-panic-percentage":                 "200.0",
 			"tick-interval":                           "2s",
 		},
 		want: &Config{
@@ -131,6 +140,8 @@ func TestNewConfig(t *testing.T) {
 			MaxScaleUpRate:                       1.0,
 			StableWindow:                         5 * time.Minute,
 			PanicWindow:                          10 * time.Second,
+			WindowPanicPercentage:                10.0,
+			TargetPanicPercentage:                200.0,
 			ScaleToZeroGracePeriod:               30 * time.Second,
 			TickInterval:                         2 * time.Second,
 		},
@@ -144,6 +155,8 @@ func TestNewConfig(t *testing.T) {
 			"container-concurrency-target-default":    "10.0",
 			"stable-window":                           "5m",
 			"panic-window":                            "10s",
+			"window-panic-percentage":                 "10.0",
+			"target-panic-percentage":                 "200.0",
 			"tick-interval":                           "2s",
 		},
 		want: &Config{
@@ -152,6 +165,8 @@ func TestNewConfig(t *testing.T) {
 			MaxScaleUpRate:                       1.0,
 			StableWindow:                         5 * time.Minute,
 			PanicWindow:                          10 * time.Second,
+			WindowPanicPercentage:                10.0,
+			TargetPanicPercentage:                200.0,
 			ScaleToZeroGracePeriod:               30 * time.Second,
 			TickInterval:                         2 * time.Second,
 		},
@@ -165,6 +180,8 @@ func TestNewConfig(t *testing.T) {
 			"container-concurrency-target-default":    "10.0",
 			"stable-window":                           "5m",
 			"panic-window":                            "10s",
+			"window-panic-percentage":                 "10.0",
+			"target-panic-percentage":                 "200.0",
 			"scale-to-zero-grace-period":              "30s",
 			"tick-interval":                           "2s",
 		},
@@ -174,6 +191,8 @@ func TestNewConfig(t *testing.T) {
 			MaxScaleUpRate:                       1.0,
 			StableWindow:                         5 * time.Minute,
 			PanicWindow:                          10 * time.Second,
+			WindowPanicPercentage:                10.0,
+			TargetPanicPercentage:                200.0,
 			ScaleToZeroGracePeriod:               30 * time.Second,
 			TickInterval:                         2 * time.Second,
 		},
@@ -184,6 +203,8 @@ func TestNewConfig(t *testing.T) {
 			"container-concurrency-target-default":    "10.0",
 			"stable-window":                           "5m",
 			"panic-window":                            "10s",
+			"window-panic-percentage":                 "10.0",
+			"target-panic-percentage":                 "200.0",
 			"tick-interval":                           "2s",
 		},
 		wantErr: true,
@@ -205,6 +226,8 @@ func TestNewConfig(t *testing.T) {
 			"container-concurrency-target-default":    "10.0",
 			"stable-window":                           "5m",
 			"panic-window":                            "10s",
+			"window-panic-percentage":                 "10.0",
+			"target-panic-percentage":                 "200.0",
 			"tick-interval":                           "2s",
 		},
 		wantErr: true,
@@ -216,6 +239,8 @@ func TestNewConfig(t *testing.T) {
 			"container-concurrency-target-default":    "10.0",
 			"stable-window":                           "not a duration",
 			"panic-window":                            "10s",
+			"window-panic-percentage":                 "10.0",
+			"target-panic-percentage":                 "200.0",
 			"tick-interval":                           "2s",
 		},
 		wantErr: true,

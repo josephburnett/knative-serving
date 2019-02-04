@@ -41,6 +41,7 @@ import (
 	kpav1alpha1 "github.com/knative/serving/pkg/apis/autoscaling/v1alpha1"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	fakeclientset "github.com/knative/serving/pkg/client/clientset/versioned/fake"
 	informers "github.com/knative/serving/pkg/client/informers/externalversions"
 	"github.com/knative/serving/pkg/logging"
@@ -201,7 +202,7 @@ func newTestControllerWithConfig(t *testing.T, controllerConfig *config.Controll
 	}, &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: system.Namespace(),
-			Name:      autoscaler.ConfigName,
+			Name:      autoscalerConfig.ConfigName,
 		},
 		Data: map[string]string{
 			"max-scale-up-rate":                       "1.0",

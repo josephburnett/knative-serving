@@ -25,7 +25,6 @@ import (
 	"github.com/knative/pkg/logging"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
-	"github.com/knative/serving/pkg/autoscaler"
 	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	"github.com/knative/serving/pkg/reconciler/v1alpha1/revision/config"
 	"github.com/knative/serving/pkg/system"
@@ -734,7 +733,7 @@ func TestMakeDeployment(t *testing.T) {
 		lc:   &logging.Config{},
 		nc:   &config.Network{},
 		oc:   &config.Observability{},
-		ac:   &autoscaler.Config{},
+		ac:   &autoscalerConfig.Config{},
 		cc:   &config.Controller{},
 		want: deployment(),
 	}, {
@@ -763,7 +762,7 @@ func TestMakeDeployment(t *testing.T) {
 		lc:   &logging.Config{},
 		nc:   &config.Network{},
 		oc:   &config.Observability{},
-		ac:   &autoscaler.Config{},
+		ac:   &autoscalerConfig.Config{},
 		cc:   &config.Controller{},
 		want: deployment(),
 	}, {

@@ -189,28 +189,6 @@ func TestNewConfig(t *testing.T) {
 			TickInterval:                         2 * time.Second,
 		},
 	}, {
-		name: "missing required float field",
-		input: map[string]string{
-			"container-concurrency-target-percentage": "0.5",
-			"container-concurrency-target-default":    "10.0",
-			"stable-window":                           "5m",
-			"panic-window":                            "10s",
-			"window-panic-percentage":                 "10.0",
-			"target-panic-percentage":                 "200.0",
-			"tick-interval":                           "2s",
-		},
-		wantErr: true,
-	}, {
-		name: "missing required duration field",
-		input: map[string]string{
-			"max-scale-up-rate":                       "1.0",
-			"container-concurrency-target-percentage": "0.5",
-			"container-concurrency-target-default":    "10.0",
-			"stable-window":                           "5m",
-			"tick-interval":                           "2s",
-		},
-		wantErr: true,
-	}, {
 		name: "malformed float",
 		input: map[string]string{
 			"max-scale-up-rate":                       "not a float",

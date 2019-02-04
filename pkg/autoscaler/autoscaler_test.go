@@ -435,8 +435,10 @@ func TestAutoscaler_UpdateTarget(t *testing.T) {
 		})
 	a.expectScale(t, now, 10, true)
 	a.Update(MetricSpec{
-		TargetConcurrency: 1.0,
-		Window:            a.window,
+		TargetConcurrency:      1.0,
+		TargetConcurrencyPanic: 2.0,
+		Window:                 a.spec.Window,
+		WindowPanic:            a.spec.WindowPanic,
 	})
 	a.expectScale(t, now, 100, true)
 }
@@ -454,8 +456,10 @@ func TestAutoscaler_UpdateIncreaseWindow(t *testing.T) {
 		})
 	a.expectScale(t, now, 10, true)
 	a.Update(MetricSpec{
-		TargetConcurrency: a.target,
-		Window:            a.window * 2,
+		TargetConcurrency:      a.spec.TargetConcurrency,
+		TargetConcurrencyPanic: a.spec.TargetConcurrencyPanic,
+		Window:                 a.spec.Window * 2,
+		WindowPanic:            a.spec.WindowPanic * 2,
 	})
 	// Increasing the window retains all data and the desired scale
 	// will not change.
@@ -485,8 +489,10 @@ func TestAutoscaler_UpdateDecreaseWindow(t *testing.T) {
 	// Average concurrency is 20.
 	a.expectScale(t, now, 20, true)
 	a.Update(MetricSpec{
-		TargetConcurrency: a.target,
-		Window:            a.window / 2,
+		TargetConcurrency:      a.spec.TargetConcurrency,
+		TargetConcurrencyPanic: a.spec.TargetConcurrencyPanic,
+		Window:                 a.spec.Window / 2,
+		WindowPanic:            a.spec.WindowPanic / 2,
 	})
 	// Decreasing the window will truncate older data, in this case
 	// the higher concurrency reading of 30.
@@ -553,13 +559,17 @@ func newTestAutoscaler(containerConcurrency int) *Autoscaler {
 		MaxScaleUpRate:                       10.0,
 		StableWindow:                         stableWindow,
 		PanicWindow:                          panicWindow,
+		WindowPanicPercentage:                10.0,
+		TargetPanicPercentage:                200.0,
 		ScaleToZeroGracePeriod:               scaleToZeroGracePeriod,
 	}
 
 	dynConfig := autoscalerConfig.NewDynamicConfig(config, zap.NewNop().Sugar())
 	return New(dynConfig, MetricSpec{
-		TargetConcurrency: float64(containerConcurrency),
-		Window:            stableWindow,
+		TargetConcurrency:      float64(containerConcurrency),
+		TargetConcurrencyPanic: float64(containerConcurrency) * 2,
+		Window:                 stableWindow,
+		WindowPanic:            panicWindow,
 	}, &mockReporter{})
 }
 

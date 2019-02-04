@@ -17,6 +17,8 @@ kind: Deployment
 metadata:
   name: webhook
   namespace: knative-serving
+  labels:
+    serving.knative.dev/release: devel
 spec:
   replicas: 1
   selector:
@@ -51,6 +53,11 @@ spec:
           mountPath: /etc/config-logging
         - name: config-autoscaler
           mountPath: /etc/config-autoscaler
+        env:
+        - name: SYSTEM_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
       volumes:
         - name: config-logging
           configMap:

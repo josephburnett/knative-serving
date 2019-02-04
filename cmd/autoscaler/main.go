@@ -23,6 +23,7 @@ import (
 
 	"github.com/knative/pkg/configmap"
 	"github.com/knative/pkg/signals"
+	"github.com/knative/pkg/version"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/autoscaler"
 	config "github.com/knative/serving/pkg/autoscaler/config"
@@ -81,16 +82,20 @@ func main() {
 
 	cfg, err := clientcmd.BuildConfigFromFlags(*masterURL, *kubeconfig)
 	if err != nil {
-		logger.Fatal("Error building kubeconfig.", zap.Error(err))
+		logger.Fatalw("Error building kubeconfig", zap.Error(err))
 	}
 
 	kubeClientSet, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		logger.Fatal("Error building kubernetes clientset.", zap.Error(err))
+		logger.Fatalw("Error building kubernetes clientset", zap.Error(err))
+	}
+
+	if err := version.CheckMinimumVersion(kubeClientSet.Discovery()); err != nil {
+		logger.Fatalf("Version check failed: %v", err)
 	}
 
 	// Watch the logging config map and dynamically update logging levels.
-	configMapWatcher := configmap.NewInformedWatcher(kubeClientSet, system.Namespace)
+	configMapWatcher := configmap.NewInformedWatcher(kubeClientSet, system.Namespace())
 	configMapWatcher.Watch(logging.ConfigName, logging.UpdateLevelFromConfigMap(logger, atomicLevel, component))
 	// Watch the observability config map and dynamically update metrics exporter.
 	configMapWatcher.Watch(metrics.ObservabilityConfigName, metrics.UpdateExporterFromConfigMap(component, logger))
@@ -100,21 +105,21 @@ func main() {
 	scaleClient, err := scale.NewForConfig(cfg, restMapper, dynamic.LegacyAPIPathResolverFunc,
 		scale.NewDiscoveryScaleKindResolver(kubeClientSet.Discovery()))
 	if err != nil {
-		logger.Fatal("Error building scale clientset.", zap.Error(err))
+		logger.Fatalw("Error building scale clientset", zap.Error(err))
 	}
 
 	servingClientSet, err := clientset.NewForConfig(cfg)
 	if err != nil {
-		logger.Fatal("Error building serving clientset.", zap.Error(err))
+		logger.Fatalw("Error building serving clientset", zap.Error(err))
 	}
 
 	rawConfig, err := configmap.Load("/etc/config-autoscaler")
 	if err != nil {
-		logger.Fatalf("Error reading autoscaler configuration: %v", err)
+		logger.Fatalw("Error reading autoscaler configuration", zap.Error(err))
 	}
 	dynConfig, err := config.NewDynamicConfigFromMap(rawConfig, logger)
 	if err != nil {
-		logger.Fatalf("Error parsing autoscaler configuration: %v", err)
+		logger.Fatalw("Error parsing autoscaler configuration", zap.Error(err))
 	}
 	// Watch the autoscaler config map and dynamically update autoscaler config.
 	configMapWatcher.Watch(config.ConfigName, dynConfig.Update)
@@ -142,7 +147,7 @@ func main() {
 	kubeInformerFactory.Start(stopCh)
 	servingInformerFactory.Start(stopCh)
 	if err := configMapWatcher.Start(stopCh); err != nil {
-		logger.Fatalf("failed to start watching logging config: %v", err)
+		logger.Fatalw("Failed to start watching logging config", zap.Error(err))
 	}
 
 	// Wait for the caches to be synced before starting controllers.
@@ -153,7 +158,7 @@ func main() {
 		hpaInformer.Informer().HasSynced,
 	} {
 		if ok := cache.WaitForCacheSync(stopCh, synced); !ok {
-			logger.Fatalf("failed to wait for cache at index %v to sync", i)
+			logger.Fatalf("Failed to wait for cache at index %d to sync", i)
 		}
 	}
 
@@ -186,7 +191,7 @@ func main() {
 
 	go func() {
 		if err := eg.Wait(); err != nil {
-			logger.Error("Group error.", zap.Error(err))
+			logger.Errorw("Group error.", zap.Error(err))
 		}
 		close(egCh)
 	}()

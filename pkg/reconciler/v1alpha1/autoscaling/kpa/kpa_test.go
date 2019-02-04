@@ -34,6 +34,7 @@ import (
 	"github.com/knative/serving/pkg/reconciler"
 	revisionresources "github.com/knative/serving/pkg/reconciler/v1alpha1/revision/resources"
 	"github.com/knative/serving/pkg/system"
+	_ "github.com/knative/serving/pkg/system/testing"
 	"go.uber.org/atomic"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -45,12 +46,12 @@ import (
 
 var (
 	gracePeriod   = 60 * time.Second
-	idlePeriod    = 9 * time.Minute
+	stableWindow  = 5 * time.Minute
 	configMapData = map[string]string{
 		"max-scale-up-rate":                       "1.0",
 		"container-concurrency-target-percentage": "0.5",
 		"container-concurrency-target-default":    "10.0",
-		"stable-window":                           "5m",
+		"stable-window":                           stableWindow.String(),
 		"panic-window":                            "10s",
 		"window-panic-percentage":                 "10.0",
 		"target-panic-percentage":                 "200.0",
@@ -62,8 +63,8 @@ var (
 func newConfigWatcher() configmap.Watcher {
 	return configmap.NewStaticWatcher(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: system.Namespace,
-			Name:      autoscalerConfig.ConfigName,
+			Namespace: system.Namespace(),
+			Name:      autoscaler.ConfigName,
 		},
 		Data: configMapData,
 	})
@@ -314,7 +315,7 @@ func TestNonKpaClass(t *testing.T) {
 
 	// Verify no KPAMetrics were created
 	if fakeMetrics.createCallCount.Load() != 0 {
-		t.Errorf("Unexpected KPAMetrics created")
+		t.Error("Unexpected KPAMetrics created")
 	}
 }
 
@@ -732,7 +733,7 @@ func newTestRevision(namespace string, name string) *v1alpha1.Revision {
 				Args:       []string{"hello", "world"},
 				WorkingDir: "/tmp",
 			},
-			ConcurrencyModel: v1alpha1.RevisionRequestConcurrencyModelSingle,
+			DeprecatedConcurrencyModel: v1alpha1.RevisionRequestConcurrencyModelSingle,
 		},
 	}
 }

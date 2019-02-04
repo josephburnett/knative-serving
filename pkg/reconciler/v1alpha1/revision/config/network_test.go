@@ -42,12 +42,14 @@ func TestNetworkConfiguration(t *testing.T) {
 		wantController interface{}
 		config         *corev1.ConfigMap
 	}{{
-		name:           "network configuration with no network input",
-		wantErr:        false,
-		wantController: &Network{},
+		name:    "network configuration with no network input",
+		wantErr: false,
+		wantController: &Network{
+			IstioOutboundIPRanges: "*",
+		},
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 		}}, {
@@ -56,7 +58,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		wantController: (*Network)(nil),
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -68,7 +70,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		wantController: &Network{},
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -80,7 +82,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		wantController: (*Network)(nil),
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -92,7 +94,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		wantController: (*Network)(nil),
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -104,7 +106,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		wantController: (*Network)(nil),
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -116,7 +118,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		wantController: (*Network)(nil),
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -128,7 +130,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		wantController: (*Network)(nil),
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -140,7 +142,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		wantController: &Network{},
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -152,7 +154,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		wantController: &Network{},
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -164,7 +166,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		wantController: &Network{},
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -178,7 +180,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		},
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -192,7 +194,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		},
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{
@@ -206,7 +208,7 @@ func TestNetworkConfiguration(t *testing.T) {
 		},
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      NetworkConfigName,
 			},
 			Data: map[string]string{

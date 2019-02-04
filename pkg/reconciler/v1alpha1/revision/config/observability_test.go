@@ -52,7 +52,7 @@ func TestObservabilityConfiguration(t *testing.T) {
 		},
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      ObservabilityConfigName,
 			},
 			Data: map[string]string{
@@ -67,11 +67,11 @@ func TestObservabilityConfiguration(t *testing.T) {
 		wantErr: false,
 		wantController: &Observability{
 			EnableVarLogCollection: false,
-			LoggingURLTemplate:     "",
+			LoggingURLTemplate:     defaultLogURLTemplate,
 		},
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      ObservabilityConfigName,
 			},
 		},
@@ -81,7 +81,7 @@ func TestObservabilityConfiguration(t *testing.T) {
 		wantController: (*Observability)(nil),
 		config: &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      ObservabilityConfigName,
 			},
 			Data: map[string]string{
@@ -91,14 +91,16 @@ func TestObservabilityConfiguration(t *testing.T) {
 	}}
 
 	for _, tt := range observabilityConfigTests {
-		actualController, err := NewObservabilityFromConfigMap(tt.config)
+		t.Run(tt.name, func(t *testing.T) {
+			actualController, err := NewObservabilityFromConfigMap(tt.config)
 
-		if (err != nil) != tt.wantErr {
-			t.Fatalf("Test: %q; NewObservabilityFromConfigMap() error = %v, WantErr %v", tt.name, err, tt.wantErr)
-		}
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Test: %q; NewObservabilityFromConfigMap() error = %v, WantErr %v", tt.name, err, tt.wantErr)
+			}
 
-		if diff := cmp.Diff(actualController, tt.wantController); diff != "" {
-			t.Fatalf("Test: %q; want %v, but got %v", tt.name, tt.wantController, actualController)
-		}
+			if diff := cmp.Diff(actualController, tt.wantController); diff != "" {
+				t.Fatalf("Test: %q; want %v, but got %v", tt.name, tt.wantController, actualController)
+			}
+		})
 	}
 }

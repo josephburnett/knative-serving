@@ -49,9 +49,9 @@ func (rs *RevisionSpec) Validate() *apis.FieldError {
 	errs := validateContainer(rs.Container).ViaField("container").
 		Also(validateBuildRef(rs.BuildRef).ViaField("buildRef"))
 
-	if err := rs.ConcurrencyModel.Validate().ViaField("concurrencyModel"); err != nil {
+	if err := rs.DeprecatedConcurrencyModel.Validate().ViaField("concurrencyModel"); err != nil {
 		errs = errs.Also(err)
-	} else if err := ValidateContainerConcurrency(rs.ContainerConcurrency, rs.ConcurrencyModel); err != nil {
+	} else if err := ValidateContainerConcurrency(rs.ContainerConcurrency, rs.DeprecatedConcurrencyModel); err != nil {
 		errs = errs.Also(err)
 	}
 
@@ -196,6 +196,13 @@ func validateContainerPorts(ports []corev1.ContainerPort) *apis.FieldError {
 	}
 	if len(disallowedFields) != 0 {
 		errs = errs.Also(apis.ErrDisallowedFields(disallowedFields...))
+	}
+
+	// Don't allow userPort to conflict with QueueProxy sidecar
+	if userPort.ContainerPort == RequestQueuePort ||
+		userPort.ContainerPort == RequestQueueAdminPort ||
+		userPort.ContainerPort == RequestQueueMetricsPort {
+		errs = errs.Also(apis.ErrInvalidValue(strconv.Itoa(int(userPort.ContainerPort)), "ContainerPort"))
 	}
 
 	if userPort.ContainerPort < 1 || userPort.ContainerPort > 65535 {

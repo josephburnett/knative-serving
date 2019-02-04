@@ -191,10 +191,19 @@ func NewController(
 
 	c.buildInformerFactory = newDuckInformerFactory(c.tracker, buildInformerFactory)
 
-	// TODO(mattmoor): When we support reconciling Deployment differences,
-	// we should consider triggering a global reconciliation here to the
-	// logging configuration changes are rolled out to active revisions.
-	c.configStore = config.NewStore(c.Logger.Named("config-store"))
+	configsToResync := []interface{}{
+		&config.Network{},
+		&config.Observability{},
+		&config.Controller{},
+	}
+
+	resync := configmap.TypeFilter(configsToResync...)(func(string, interface{}) {
+		// Triggers syncs on all revisions when configuration
+		// changes
+		impl.GlobalResync(revisionInformer.Informer())
+	})
+
+	c.configStore = config.NewStore(c.Logger.Named("config-store"), resync)
 	c.configStore.WatchConfigs(opt.ConfigMapWatcher)
 
 	return impl
@@ -341,6 +350,9 @@ func (c *Reconciler) reconcileDigest(ctx context.Context, rev *v1alpha1.Revision
 
 func (c *Reconciler) reconcile(ctx context.Context, rev *v1alpha1.Revision) error {
 	logger := commonlogging.FromContext(ctx)
+	if rev.GetDeletionTimestamp() != nil {
+		return nil
+	}
 
 	// We may be reading a version of the object that was stored at an older version
 	// and may not have had all of the assumed defaults specified.  This won't result
@@ -420,6 +432,5 @@ func (c *Reconciler) updateStatus(desired *v1alpha1.Revision) (*v1alpha1.Revisio
 	// Don't modify the informers copy
 	existing := rev.DeepCopy()
 	existing.Status = desired.Status
-	// TODO: for CRD there's no updatestatus, so use normal update
-	return c.ServingClientSet.ServingV1alpha1().Revisions(desired.Namespace).Update(existing)
+	return c.ServingClientSet.ServingV1alpha1().Revisions(desired.Namespace).UpdateStatus(existing)
 }

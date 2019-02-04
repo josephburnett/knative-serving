@@ -118,24 +118,64 @@ const (
 	RevisionContainerConcurrencyMax RevisionContainerConcurrencyType = 1000
 )
 
+// RevisionProtocolType is an enumeration of the supported application-layer protocols
+// See also: https://github.com/knative/serving/blob/master/docs/runtime-contract.md#protocols-and-ports
+type RevisionProtocolType string
+
+const (
+	// HTTP/1.1
+	RevisionProtocolHTTP1 RevisionProtocolType = "http1"
+	// HTTP/2 with Prior Knowledge
+	RevisionProtocolH2C RevisionProtocolType = "h2c"
+)
+
 const (
 	// UserPortName is the name that will be used for the Port on the
 	// Deployment and Pod created by a Revision. This name will be set regardless of if
 	// a user specifies a port or the default value is chosen.
 	UserPortName = "user-port"
+
 	// DefaultUserPort is the default port value the QueueProxy will
 	// use for connecting to the user container.
 	DefaultUserPort = 8080
+
+	// RequestQueuePortName specifies the port name to use for http requests
+	// in queue-proxy container.
+	RequestQueuePortName string = "queue-port"
+
+	// RequestQueuePort specifies the port number to use for http requests
+	// in queue-proxy container.
+	RequestQueuePort = 8012
+
+	// RequestQueueAdminPortName specifies the port name for
+	// health check and lifecyle hooks for queue-proxy.
+	RequestQueueAdminPortName string = "queueadm-port"
+
+	// RequestQueueAdminPort specifies the port number for
+	// health check and lifecyle hooks for queue-proxy.
+	RequestQueueAdminPort = 8022
+
+	// RequestQueueMetricsPort specifies the port number for metrics emitted
+	// by queue-proxy.
+	RequestQueueMetricsPort = 9090
+
+	// RequestQueueMetricsPortName specifies the port name to use for metrics
+	// emitted by queue-proxy.
+	RequestQueueMetricsPortName = "queue-metrics"
 )
 
 // RevisionSpec holds the desired state of the Revision (from the client).
 type RevisionSpec struct {
-	// TODO: Generation does not work correctly with CRD. They are scrubbed
-	// by the APIserver (https://github.com/kubernetes/kubernetes/issues/58778)
-	// So, we add Generation here. Once that gets fixed, remove this and use
-	// ObjectMeta.Generation instead.
+	// DeprecatedGeneration was used prior in Kubernetes versions <1.11
+	// when metadata.generation was not being incremented by the api server
+	//
+	// This property will be dropped in future Knative releases and should
+	// not be used - use metadata.generation
+	//
+	// Tracking issue: https://github.com/knative/serving/issues/643
+	//
 	// +optional
-	Generation int64 `json:"generation,omitempty"`
+	DeprecatedGeneration int64 `json:"generation,omitempty"`
 
 	// DeprecatedServingState holds a value describing the desired state the Kubernetes
 	// resources should be in for this Revision.
@@ -144,12 +184,12 @@ type RevisionSpec struct {
 	// +optional
 	DeprecatedServingState DeprecatedRevisionServingStateType `json:"servingState,omitempty"`
 
-	// ConcurrencyModel specifies the desired concurrency model
+	// DeprecatedConcurrencyModel specifies the desired concurrency model
 	// (Single or Multi) for the
 	// Revision. Defaults to Multi.
 	// Deprecated in favor of ContainerConcurrency.
 	// +optional
-	ConcurrencyModel RevisionRequestConcurrencyModelType `json:"concurrencyModel,omitempty"`
+	DeprecatedConcurrencyModel RevisionRequestConcurrencyModelType `json:"concurrencyModel,omitempty"`
 
 	// ContainerConcurrency specifies the maximum allowed
 	// in-flight (concurrent) requests per container of the Revision.
@@ -169,11 +209,11 @@ type RevisionSpec struct {
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
-	// BuildName optionally holds the name of the Build responsible for
+	// DeprecatedBuildName optionally holds the name of the Build responsible for
 	// producing the container image for its Revision.
 	// DEPRECATED: Use BuildRef instead.
 	// +optional
-	BuildName string `json:"buildName,omitempty"`
+	DeprecatedBuildName string `json:"buildName,omitempty"`
 
 	// BuildRef holds the reference to the build (if there is one) responsible
 	// for producing the container image for this Revision. Otherwise, nil
@@ -275,16 +315,25 @@ func (r *Revision) BuildRef() *corev1.ObjectReference {
 		return buildRef
 	}
 
-	if r.Spec.BuildName != "" {
+	if r.Spec.DeprecatedBuildName != "" {
 		return &corev1.ObjectReference{
 			APIVersion: "build.knative.dev/v1alpha1",
 			Kind:       "Build",
 			Namespace:  r.Namespace,
-			Name:       r.Spec.BuildName,
+			Name:       r.Spec.DeprecatedBuildName,
 		}
 	}
 
 	return nil
+}
+
+func (r *Revision) GetProtocol() RevisionProtocolType {
+	ports := r.Spec.Container.Ports
+	if len(ports) > 0 && ports[0].Name == "h2c" {
+		return RevisionProtocolH2C
+	}
+
+	return RevisionProtocolHTTP1
 }
 
 // IsReady looks at the conditions and if the Status has a condition
@@ -298,10 +347,6 @@ func (rs *RevisionStatus) IsActivationRequired() bool {
 		return c.Status != corev1.ConditionTrue
 	}
 	return false
-}
-
-func (rs *RevisionStatus) IsRoutable() bool {
-	return rs.IsReady() || rs.IsActivationRequired()
 }
 
 func (rs *RevisionStatus) GetCondition(t duckv1alpha1.ConditionType) *duckv1alpha1.Condition {
@@ -327,6 +372,13 @@ func (rs *RevisionStatus) PropagateBuildStatus(bs duckv1alpha1.KResourceStatus) 
 	}
 }
 
+// MarkResourceNotOwned changes the "ResourcesAvailable" condition to false to reflect that the
+// resource of the given kind and name has already been created, and we do not own it.
+func (rs *RevisionStatus) MarkResourceNotOwned(kind, name string) {
+	revCondSet.Manage(rs).MarkFalse(RevisionConditionResourcesAvailable, "NotOwned",
+		fmt.Sprintf("There is an existing %s %q that we do not own.", kind, name))
+}
+
 func (rs *RevisionStatus) MarkDeploying(reason string) {
 	revCondSet.Manage(rs).MarkUnknown(RevisionConditionResourcesAvailable, reason, "")
 	revCondSet.Manage(rs).MarkUnknown(RevisionConditionContainerHealthy, reason, "")
@@ -343,6 +395,11 @@ func (rs *RevisionStatus) MarkProgressDeadlineExceeded(message string) {
 
 func (rs *RevisionStatus) MarkContainerHealthy() {
 	revCondSet.Manage(rs).MarkTrue(RevisionConditionContainerHealthy)
+}
+
+func (rs *RevisionStatus) MarkContainerExiting(exitCode int32, message string) {
+	exitCodeString := fmt.Sprintf("ExitCode%d", exitCode)
+	revCondSet.Manage(rs).MarkFalse(RevisionConditionContainerHealthy, exitCodeString, RevisionContainerExitingMessage(message))
 }
 
 func (rs *RevisionStatus) MarkResourcesAvailable() {
@@ -381,6 +438,12 @@ func (rs *RevisionStatus) SetConditions(conditions duckv1alpha1.Conditions) {
 // cannot be pulled correctly.
 func RevisionContainerMissingMessage(image string, message string) string {
 	return fmt.Sprintf("Unable to fetch image %q: %s", image, message)
+}
+
+// RevisionContainerExitingMessage constructs the status message if a container
+// fails to come up.
+func RevisionContainerExitingMessage(message string) string {
+	return fmt.Sprintf("Container failed with: %s", message)
 }
 
 const (
@@ -448,30 +511,4 @@ func (r *Revision) GetLastPinned() (time.Time, error) {
 	}
 
 	return time.Unix(secs, 0), nil
-}
-
-func (r *Revision) GetConfigurationGeneration() (int64, error) {
-	if r.Labels == nil {
-		return 0, configurationGenerationParseError{
-			Type: LabelParserErrorTypeMissing,
-		}
-	}
-
-	str, ok := r.ObjectMeta.Labels[serving.ConfigurationGenerationLabelKey]
-	if !ok {
-		return 0, configurationGenerationParseError{
-			Type: LabelParserErrorTypeMissing,
-		}
-	}
-
-	gen, err := strconv.ParseInt(str, 10, 64)
-	if err != nil {
-		return 0, configurationGenerationParseError{
-			Type:  LabelParserErrorTypeInvalid,
-			Value: str,
-			Err:   err,
-		}
-	}
-
-	return gen, nil
 }

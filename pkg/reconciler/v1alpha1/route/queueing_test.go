@@ -64,7 +64,7 @@ func TestNewRouteCallsSyncHandler(t *testing.T) {
 	configMapWatcher := configmap.NewStaticWatcher(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      config.DomainConfigName,
-			Namespace: system.Namespace,
+			Namespace: system.Namespace(),
 		},
 		Data: map[string]string{
 			defaultDomainSuffix: "",
@@ -73,7 +73,7 @@ func TestNewRouteCallsSyncHandler(t *testing.T) {
 	}, &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gc.ConfigName,
-			Namespace: system.Namespace,
+			Namespace: system.Namespace(),
 		},
 		Data: map[string]string{},
 	})
@@ -122,6 +122,9 @@ func TestNewRouteCallsSyncHandler(t *testing.T) {
 	kubeInformer.Start(stopCh)
 	servingInformer.Start(stopCh)
 	configMapWatcher.Start(stopCh)
+
+	kubeInformer.WaitForCacheSync(stopCh)
+	servingInformer.WaitForCacheSync(stopCh)
 
 	// Run the controller.
 	eg.Go(func() error {

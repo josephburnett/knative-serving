@@ -33,6 +33,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -57,12 +58,36 @@ func (c *Reconciler) reconcileDeployment(ctx context.Context, rev *v1alpha1.Revi
 	} else if err != nil {
 		logger.Errorf("Error reconciling deployment %q: %v", deploymentName, err)
 		return err
+	} else if !metav1.IsControlledBy(deployment, rev) {
+		// Surface an error in the revision's status, and return an error.
+		rev.Status.MarkResourceNotOwned("Deployment", deploymentName)
+		return fmt.Errorf("Revision: %q does not own Deployment: %q", rev.Name, deploymentName)
 	} else {
 		// The deployment exists, but make sure that it has the shape that we expect.
 		deployment, _, err = c.checkAndUpdateDeployment(ctx, rev, deployment)
 		if err != nil {
 			logger.Errorf("Error updating deployment %q: %v", deploymentName, err)
 			return err
+		}
+	}
+
+	// If a container keeps crashing (no active pods in the deployment although we want some)
+	if *deployment.Spec.Replicas > 0 && deployment.Status.AvailableReplicas == 0 {
+		pods, err := c.KubeClientSet.CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: metav1.FormatLabelSelector(deployment.Spec.Selector)})
+		if err != nil {
+			logger.Errorf("Error getting pods: %v", err)
+		} else if len(pods.Items) > 0 {
+			// Arbitrarily grab the very first pod, as they all should be crashing
+			pod := pods.Items[0]
+
+			for _, status := range pod.Status.ContainerStatuses {
+				if status.Name == resources.UserContainerName {
+					if t := status.LastTerminationState.Terminated; t != nil {
+						rev.Status.MarkContainerExiting(t.ExitCode, t.Message)
+					}
+					break
+				}
+			}
 		}
 	}
 
@@ -112,6 +137,10 @@ func (c *Reconciler) reconcileKPA(ctx context.Context, rev *v1alpha1.Revision) e
 	} else if getKPAErr != nil {
 		logger.Errorf("Error reconciling kpa %q: %v", kpaName, getKPAErr)
 		return getKPAErr
+	} else if !metav1.IsControlledBy(kpa, rev) {
+		// Surface an error in the revision's status, and return an error.
+		rev.Status.MarkResourceNotOwned("PodAutoscaler", kpaName)
+		return fmt.Errorf("Revision: %q does not own PodAutoscaler: %q", rev.Name, kpaName)
 	}
 
 	// Reflect the KPA status in our own.
@@ -150,6 +179,10 @@ func (c *Reconciler) reconcileService(ctx context.Context, rev *v1alpha1.Revisio
 	} else if err != nil {
 		logger.Errorf("Error reconciling Active Service %q: %v", serviceName, err)
 		return err
+	} else if !metav1.IsControlledBy(service, rev) {
+		// Surface an error in the revision's status, and return an error.
+		rev.Status.MarkResourceNotOwned("Service", serviceName)
+		return fmt.Errorf("Revision: %q does not own Service: %q", rev.Name, serviceName)
 	} else {
 		// If it exists, then make sure if looks as we expect.
 		// It may change if a user edits things around our controller, which we

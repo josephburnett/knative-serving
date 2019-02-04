@@ -27,6 +27,8 @@ import (
 	serviceresourcenames "github.com/knative/serving/pkg/reconciler/v1alpha1/service/resources/names"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/knative/serving/pkg/reconciler/v1alpha1/testing"
 )
 
 // TODO(dangerd): Move function to duck.CreateBytePatch
@@ -48,7 +50,7 @@ func validateCreatedServiceStatus(clients *Clients, names *ResourceNames) error 
 			return false, fmt.Errorf("lastCreatedRevision is not present in Service status: %v", s)
 		}
 		names.Revision = s.Status.LatestCreatedRevisionName
-		if s.Status.DomainInternal == "" {
+		if s.Status.DeprecatedDomainInternal == "" {
 			return false, fmt.Errorf("domainInternal is not present in Service status: %v", s)
 		}
 		if s.Status.LatestReadyRevisionName == "" {
@@ -127,19 +129,11 @@ func CreateRunLatestServiceReady(logger *logging.BaseLogger, clients *Clients, n
 }
 
 // CreateLatestService creates a service in namespace with the name names.Service and names.Image
-func CreateLatestService(logger *logging.BaseLogger, clients *Clients, names ResourceNames, options *Options) (*v1alpha1.Service, error) {
-	service := LatestService(ServingNamespace, names, ImagePath(names.Image), options)
+func CreateLatestService(logger *logging.BaseLogger, clients *Clients, names ResourceNames, options *Options, fopt ...testing.ServiceOption) (*v1alpha1.Service, error) {
+	service := LatestService(ServingNamespace, names, options, fopt...)
 	LogResourceObject(logger, ResourceObjects{Service: service})
 	svc, err := clients.ServingClient.Services.Create(service)
 	return svc, err
-}
-
-// CreateLatestServiceWithResources creates a service in namespace with the name names.Service
-// that uses the image specified by imagePath
-func CreateLatestServiceWithResources(logger *logging.BaseLogger, clients *Clients, names ResourceNames, imagePath string) (*v1alpha1.Service, error) {
-	service := LatestServiceWithResources(ServingNamespace, names, imagePath)
-	LogResourceObject(logger, ResourceObjects{Service: service})
-	return clients.ServingClient.Services.Create(service)
 }
 
 // PatchReleaseService patches an existing service in namespace with the name names.Service
@@ -171,8 +165,8 @@ func PatchServiceImage(logger *logging.BaseLogger, clients *Clients, svc *v1alph
 		newSvc.Spec.RunLatest.Configuration.RevisionTemplate.Spec.Container.Image = imagePath
 	} else if svc.Spec.Release != nil {
 		newSvc.Spec.Release.Configuration.RevisionTemplate.Spec.Container.Image = imagePath
-	} else if svc.Spec.Pinned != nil {
-		newSvc.Spec.Pinned.Configuration.RevisionTemplate.Spec.Container.Image = imagePath
+	} else if svc.Spec.DeprecatedPinned != nil {
+		newSvc.Spec.DeprecatedPinned.Configuration.RevisionTemplate.Spec.Container.Image = imagePath
 	} else {
 		return nil, fmt.Errorf("UpdateImageService(%v): unable to determine service type", svc)
 	}
@@ -201,8 +195,8 @@ func PatchServiceRevisionTemplateMetadata(logger *logging.BaseLogger, clients *C
 		newSvc.Spec.RunLatest.Configuration.RevisionTemplate.ObjectMeta = metadata
 	} else if svc.Spec.Release != nil {
 		newSvc.Spec.Release.Configuration.RevisionTemplate.ObjectMeta = metadata
-	} else if svc.Spec.Pinned != nil {
-		newSvc.Spec.Pinned.Configuration.RevisionTemplate.ObjectMeta = metadata
+	} else if svc.Spec.DeprecatedPinned != nil {
+		newSvc.Spec.DeprecatedPinned.Configuration.RevisionTemplate.ObjectMeta = metadata
 	} else {
 		return nil, fmt.Errorf("UpdateServiceRevisionTemplateMetadata(%v): unable to determine service type", svc)
 	}

@@ -18,6 +18,7 @@ package kpa
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/knative/pkg/apis"
@@ -114,7 +115,7 @@ func (ks *kpaScaler) Scale(ctx context.Context, pa *pav1alpha1.PodAutoscaler, de
 
 	gv, err := schema.ParseGroupVersion(pa.Spec.ScaleTargetRef.APIVersion)
 	if err != nil {
-		logger.Error("Unable to parse APIVersion.", zap.Error(err))
+		logger.Errorw("Unable to parse APIVersion", zap.Error(err))
 		return desiredScale, err
 	}
 	resource := apis.KindToResource(gv.WithKind(pa.Spec.ScaleTargetRef.Kind)).GroupResource()
@@ -123,10 +124,15 @@ func (ks *kpaScaler) Scale(ctx context.Context, pa *pav1alpha1.PodAutoscaler, de
 	// Identify the current scale.
 	scl, err := ks.scaleClientSet.Scales(pa.Namespace).Get(resource, resourceName)
 	if err != nil {
-		logger.Errorf("Resource %q not found.", resourceName, zap.Error(err))
+		logger.Errorw(fmt.Sprintf("Resource %q not found", resourceName), zap.Error(err))
 		return desiredScale, err
 	}
 	currentScale := scl.Spec.Replicas
+
+	if newScale := applyBounds(pa.ScaleBounds())(desiredScale); newScale != desiredScale {
+		logger.Debugf("Adjusting desiredScale: %v -> %v", desiredScale, newScale)
+		desiredScale = newScale
+	}
 
 	if desiredScale == 0 {
 		// We should only scale to zero when both of the following conditions are true:
@@ -157,7 +163,7 @@ func (ks *kpaScaler) Scale(ctx context.Context, pa *pav1alpha1.PodAutoscaler, de
 	}
 
 	// Scale from zero. When there are no metrics scale to 1.
-	if currentScale == 0 && desiredScale == -1 {
+	if currentScale == 0 && desiredScale == ScaleUnknown {
 		logger.Debugf("Scaling up from 0 to 1")
 		desiredScale = 1
 	}
@@ -165,11 +171,6 @@ func (ks *kpaScaler) Scale(ctx context.Context, pa *pav1alpha1.PodAutoscaler, de
 	if desiredScale < 0 {
 		logger.Debug("Metrics are not yet being collected.")
 		return desiredScale, nil
-	}
-
-	if newScale := applyBounds(pa.ScaleBounds())(desiredScale); newScale != desiredScale {
-		logger.Debugf("Adjusting desiredScale: %v -> %v", desiredScale, newScale)
-		desiredScale = newScale
 	}
 
 	if desiredScale == currentScale {

@@ -28,7 +28,6 @@ import (
 	ctrl "github.com/knative/pkg/controller"
 	"github.com/knative/serving/pkg/apis/serving"
 	"github.com/knative/serving/pkg/apis/serving/v1alpha1"
-	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	fakeclientset "github.com/knative/serving/pkg/client/clientset/versioned/fake"
 	informers "github.com/knative/serving/pkg/client/informers/externalversions"
 	"github.com/knative/serving/pkg/logging"
@@ -105,8 +104,8 @@ func getTestRevision() *v1alpha1.Revision {
 				},
 				TerminationMessagePath: "/dev/null",
 			},
-			ConcurrencyModel: v1alpha1.RevisionRequestConcurrencyModelMulti,
-			TimeoutSeconds:   60,
+			DeprecatedConcurrencyModel: v1alpha1.RevisionRequestConcurrencyModelMulti,
+			TimeoutSeconds:             60,
 		},
 	}
 }
@@ -121,7 +120,7 @@ func getTestControllerConfigMap() *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      config.ControllerConfigName,
-			Namespace: system.Namespace,
+			Namespace: system.Namespace(),
 		},
 		Data: map[string]string{
 			"queueSidecarImage": testQueueImage,
@@ -148,7 +147,7 @@ func newTestController(t *testing.T, stopCh <-chan struct{}, servingObjects ...r
 	cachingClient = fakecachingclientset.NewSimpleClientset()
 	dynamicClient = fakedynamicclientset.NewSimpleDynamicClient(runtime.NewScheme())
 
-	configMapWatcher = &configmap.ManualWatcher{Namespace: system.Namespace}
+	configMapWatcher = &configmap.ManualWatcher{Namespace: system.Namespace()}
 
 	opt := rclr.Options{
 		KubeClientSet:    kubeClient,
@@ -185,11 +184,11 @@ func newTestController(t *testing.T, stopCh <-chan struct{}, servingObjects ...r
 		getTestControllerConfigMap(),
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      config.NetworkConfigName,
 			}}, {
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      logging.ConfigName,
 			},
 			Data: map[string]string{
@@ -197,7 +196,7 @@ func newTestController(t *testing.T, stopCh <-chan struct{}, servingObjects ...r
 				"loglevel.queueproxy": "info",
 			}}, {
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
+				Namespace: system.Namespace(),
 				Name:      config.ObservabilityConfigName,
 			},
 			Data: map[string]string{
@@ -206,8 +205,8 @@ func newTestController(t *testing.T, stopCh <-chan struct{}, servingObjects ...r
 				"logging.fluentd-sidecar-output-config": testFluentdSidecarOutputConfig,
 			}}, {
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: system.Namespace,
-				Name:      autoscalerConfig.ConfigName,
+				Namespace: system.Namespace(),
+				Name:      autoscaler.ConfigName,
 			},
 			Data: map[string]string{
 				"max-scale-up-rate":                       "1.0",

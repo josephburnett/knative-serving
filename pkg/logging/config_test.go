@@ -17,17 +17,17 @@ limitations under the License.
 package logging
 
 import (
-	"fmt"
-	"io/ioutil"
 	"testing"
 
-	"github.com/ghodss/yaml"
 	"github.com/knative/pkg/logging"
 	"github.com/knative/serving/pkg/system"
+	_ "github.com/knative/serving/pkg/system/testing"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	. "github.com/knative/serving/pkg/reconciler/testing"
 )
 
 func TestNewLogger(t *testing.T) {
@@ -119,18 +119,18 @@ func TestNewLogger(t *testing.T) {
 func TestNewConfigNoEntry(t *testing.T) {
 	c, err := NewConfigFromConfigMap(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: system.Namespace,
+			Namespace: "knative-something",
 			Name:      "config-logging",
 		},
 	})
 	if err != nil {
 		t.Errorf("Expected no errors. got: %v", err)
 	}
-	if got, want := c.LoggingConfig, ""; got != want {
-		t.Errorf("LoggingConfig = %v, want %v", got, want)
+	if got := c.LoggingConfig; got == "" {
+		t.Error("LoggingConfig = empty, want not empty")
 	}
-	if got, want := len(c.LoggingLevel), 0; got != want {
-		t.Errorf("len(LoggingLevel) = %v, want %v", got, want)
+	if got, want := len(c.LoggingLevel), len(components); got != want {
+		t.Errorf("len(LoggingLevel) = %d, want %d", got, want)
 	}
 }
 
@@ -139,7 +139,7 @@ func TestNewConfig(t *testing.T) {
 	wantLevel := zapcore.InfoLevel
 	c, err := NewConfigFromConfigMap(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: system.Namespace,
+			Namespace: system.Namespace(),
 			Name:      "config-logging",
 		},
 		Data: map[string]string{
@@ -159,15 +159,8 @@ func TestNewConfig(t *testing.T) {
 }
 
 func TestOurConfig(t *testing.T) {
-	b, err := ioutil.ReadFile(fmt.Sprintf("testdata/%s.yaml", ConfigName))
-	if err != nil {
-		t.Errorf("ReadFile() = %v", err)
-	}
-	var cm corev1.ConfigMap
-	if err := yaml.Unmarshal(b, &cm); err != nil {
-		t.Errorf("yaml.Unmarshal() = %v", err)
-	}
-	cfg, err := NewConfigFromConfigMap(&cm)
+	cm := ConfigMapFromTestFile(t, ConfigName)
+	cfg, err := NewConfigFromConfigMap(cm)
 	if err != nil {
 		t.Errorf("Expected no errors. got: %v", err)
 	}
@@ -187,7 +180,7 @@ func TestNewLoggerFromConfig(t *testing.T) {
 func TestEmptyLevel(t *testing.T) {
 	c, err := NewConfigFromConfigMap(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: system.Namespace,
+			Namespace: system.Namespace(),
 			Name:      "config-logging",
 		},
 		Data: map[string]string{
@@ -196,10 +189,10 @@ func TestEmptyLevel(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Errorf("Expected no errors. got: %v", err)
+		t.Errorf("Expected no errors, got: %v", err)
 	}
-	if _, ok := c.LoggingLevel["queueproxy"]; ok {
-		t.Errorf("Expected nothing for LoggingLevel[queueproxy]. got: %v", c.LoggingLevel["queueproxy"])
+	if got, want := c.LoggingLevel["queueproxy"], zapcore.InfoLevel; got != want {
+		t.Errorf("LoggingLevel[queueproxy] = %v, want: %v", got, want)
 	}
 }
 
@@ -207,7 +200,7 @@ func TestInvalidLevel(t *testing.T) {
 	wantCfg := "{\"level\": \"error\",\n\"outputPaths\": [\"stdout\"],\n\"errorOutputPaths\": [\"stderr\"],\n\"encoding\": \"json\"}"
 	_, err := NewConfigFromConfigMap(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: system.Namespace,
+			Namespace: system.Namespace(),
 			Name:      "config-logging",
 		},
 		Data: map[string]string{
@@ -216,7 +209,7 @@ func TestInvalidLevel(t *testing.T) {
 		},
 	})
 	if err == nil {
-		t.Errorf("Expected errors. got nothing")
+		t.Error("Expected errors. got nothing")
 	}
 }
 
@@ -225,7 +218,7 @@ func getTestConfig() (*logging.Config, string, string) {
 	wantLevel := "debug"
 	c, _ := NewConfigFromConfigMap(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: system.Namespace,
+			Namespace: system.Namespace(),
 			Name:      "config-logging",
 		},
 		Data: map[string]string{
@@ -245,7 +238,7 @@ func TestUpdateLevelFromConfigMap(t *testing.T) {
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: system.Namespace,
+			Namespace: system.Namespace(),
 			Name:      "config-logging",
 		},
 		Data: map[string]string{

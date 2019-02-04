@@ -17,13 +17,11 @@ limitations under the License.
 package config
 
 import (
-	"fmt"
-	"io/ioutil"
 	"testing"
 	"time"
 
-	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
+	. "github.com/knative/serving/pkg/reconciler/testing"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -80,6 +78,7 @@ func TestNewConfig(t *testing.T) {
 			"tick-interval":                           "2s",
 		},
 		want: &Config{
+			EnableScaleToZero:                    true,
 			ContainerConcurrencyTargetPercentage: 0.5,
 			ContainerConcurrencyTargetDefault:    10.0,
 			MaxScaleUpRate:                       1.0,
@@ -94,7 +93,6 @@ func TestNewConfig(t *testing.T) {
 		name: "with toggles on",
 		input: map[string]string{
 			"enable-scale-to-zero":                    "true",
-			"enable-vertical-pod-autoscaling":         "true",
 			"max-scale-up-rate":                       "1.0",
 			"container-concurrency-target-percentage": "0.5",
 			"container-concurrency-target-default":    "10.0",
@@ -106,7 +104,6 @@ func TestNewConfig(t *testing.T) {
 		},
 		want: &Config{
 			EnableScaleToZero:                    true,
-			EnableVPA:                            true,
 			ContainerConcurrencyTargetPercentage: 0.5,
 			ContainerConcurrencyTargetDefault:    10.0,
 			MaxScaleUpRate:                       1.0,
@@ -121,7 +118,6 @@ func TestNewConfig(t *testing.T) {
 		name: "with toggles on strange casing",
 		input: map[string]string{
 			"enable-scale-to-zero":                    "TRUE",
-			"enable-vertical-pod-autoscaling":         "True",
 			"max-scale-up-rate":                       "1.0",
 			"container-concurrency-target-percentage": "0.5",
 			"container-concurrency-target-default":    "10.0",
@@ -133,7 +129,6 @@ func TestNewConfig(t *testing.T) {
 		},
 		want: &Config{
 			EnableScaleToZero:                    true,
-			EnableVPA:                            true,
 			ContainerConcurrencyTargetPercentage: 0.5,
 			ContainerConcurrencyTargetDefault:    10.0,
 			MaxScaleUpRate:                       1.0,
@@ -148,7 +143,6 @@ func TestNewConfig(t *testing.T) {
 		name: "with toggles explicitly off",
 		input: map[string]string{
 			"enable-scale-to-zero":                    "false",
-			"enable-vertical-pod-autoscaling":         "False",
 			"max-scale-up-rate":                       "1.0",
 			"container-concurrency-target-percentage": "0.5",
 			"container-concurrency-target-default":    "10.0",
@@ -173,7 +167,6 @@ func TestNewConfig(t *testing.T) {
 		name: "with explicit grace period",
 		input: map[string]string{
 			"enable-scale-to-zero":                    "false",
-			"enable-vertical-pod-autoscaling":         "False",
 			"max-scale-up-rate":                       "1.0",
 			"container-concurrency-target-percentage": "0.5",
 			"container-concurrency-target-default":    "10.0",
@@ -261,15 +254,8 @@ func TestNewConfig(t *testing.T) {
 }
 
 func TestOurConfig(t *testing.T) {
-	b, err := ioutil.ReadFile(fmt.Sprintf("testdata/%s.yaml", ConfigName))
-	if err != nil {
-		t.Errorf("ReadFile() = %v", err)
-	}
-	var cm corev1.ConfigMap
-	if err := yaml.Unmarshal(b, &cm); err != nil {
-		t.Errorf("yaml.Unmarshal() = %v", err)
-	}
-	if _, err := NewConfigFromConfigMap(&cm); err != nil {
+	cm := ConfigMapFromTestFile(t, ConfigName)
+	if _, err := NewConfigFromConfigMap(cm); err != nil {
 		t.Errorf("NewConfigFromConfigMap() = %v", err)
 	}
 }

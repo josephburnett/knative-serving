@@ -184,6 +184,9 @@ func (pa *PodAutoscaler) Window() (window time.Duration, ok bool) {
 		if err != nil {
 			return 0, false
 		}
+		if d < time.Second*6 {
+			return 0, false
+		}
 		return d, true
 	}
 	return 0, false

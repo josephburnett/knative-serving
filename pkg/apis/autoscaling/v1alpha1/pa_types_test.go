@@ -380,6 +380,53 @@ func TestTargetAnnotation(t *testing.T) {
 	}
 }
 
+func TestWindowAnnotation(t *testing.T) {
+	cases := []struct {
+		name       string
+		pa         *PodAutoscaler
+		wantWindow time.Duration
+		wantOk     bool
+	}{{
+		name:       "not present",
+		pa:         pa(map[string]string{}),
+		wantWindow: 0,
+		wantOk:     false,
+	}, {
+		name: "present",
+		pa: pa(map[string]string{
+			"autoscaling.knative.dev/window": "120s",
+		}),
+		wantWindow: time.Second * 120,
+		wantOk:     true,
+	}, {
+		name: "invalid too small",
+		pa: pa(map[string]string{
+			"autoscaling.knative.dev/window": "1s",
+		}),
+		wantWindow: 0,
+		wantOk:     false,
+	}, {
+		name: "invalid format",
+		pa: pa(map[string]string{
+			"autoscaling.knative.dev/window": "sandwich",
+		}),
+		wantWindow: 0,
+		wantOk:     false,
+	}}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotWindow, gotOk := tc.pa.Window()
+			if gotWindow != tc.wantWindow {
+				t.Errorf("%q expected target: %v got: %v", tc.name, tc.wantWindow, gotWindow)
+			}
+			if gotOk != tc.wantOk {
+				t.Errorf("%q expected ok: %v got %v", tc.name, tc.wantOk, gotOk)
+			}
+		})
+	}
+}
+
 func pa(annotations map[string]string) *PodAutoscaler {
 	p := &PodAutoscaler{
 		ObjectMeta: metav1.ObjectMeta{

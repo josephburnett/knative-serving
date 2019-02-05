@@ -74,7 +74,7 @@ func (r *PodAutoscaler) SetDefaults() {
 }
 
 func asString(v float64) string {
-	return strconv.FormatFloat(v, 'E', -1, 64)
+	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
 func (rs *PodAutoscalerSpec) SetDefaults() {

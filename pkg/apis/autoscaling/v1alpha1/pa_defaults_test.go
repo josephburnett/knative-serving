@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/knative/serving/pkg/apis/autoscaling"
+	"github.com/knative/serving/pkg/autoscaler/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -35,8 +36,12 @@ func TestPodAutoscalerDefaulting(t *testing.T) {
 		want: &PodAutoscaler{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					autoscaling.ClassAnnotationKey:  autoscaling.KPA,
-					autoscaling.MetricAnnotationKey: autoscaling.Concurrency,
+					autoscaling.ClassAnnotationKey:                 autoscaling.KPA,
+					autoscaling.MetricAnnotationKey:                autoscaling.Concurrency,
+					autoscaling.WindowAnnotationKey:                "1m0s",
+					autoscaling.WindowPanicPercentageAnnotationKey: "10",
+					autoscaling.TargetAnnotationKey:                "100",
+					autoscaling.TargetPanicPercentageAnnotationKey: "200",
 				},
 			},
 			Spec: PodAutoscalerSpec{
@@ -53,8 +58,12 @@ func TestPodAutoscalerDefaulting(t *testing.T) {
 		want: &PodAutoscaler{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					autoscaling.ClassAnnotationKey:  autoscaling.KPA,
-					autoscaling.MetricAnnotationKey: autoscaling.Concurrency,
+					autoscaling.ClassAnnotationKey:                 autoscaling.KPA,
+					autoscaling.MetricAnnotationKey:                autoscaling.Concurrency,
+					autoscaling.WindowAnnotationKey:                "1m0s",
+					autoscaling.WindowPanicPercentageAnnotationKey: "10",
+					autoscaling.TargetAnnotationKey:                "100",
+					autoscaling.TargetPanicPercentageAnnotationKey: "200",
 				},
 			},
 			Spec: PodAutoscalerSpec{
@@ -69,8 +78,12 @@ func TestPodAutoscalerDefaulting(t *testing.T) {
 		want: &PodAutoscaler{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					autoscaling.ClassAnnotationKey:  autoscaling.KPA,
-					autoscaling.MetricAnnotationKey: autoscaling.Concurrency,
+					autoscaling.ClassAnnotationKey:                 autoscaling.KPA,
+					autoscaling.MetricAnnotationKey:                autoscaling.Concurrency,
+					autoscaling.WindowAnnotationKey:                "1m0s",
+					autoscaling.WindowPanicPercentageAnnotationKey: "10",
+					autoscaling.TargetAnnotationKey:                "100",
+					autoscaling.TargetPanicPercentageAnnotationKey: "200",
 				},
 			},
 			Spec: PodAutoscalerSpec{
@@ -88,8 +101,12 @@ func TestPodAutoscalerDefaulting(t *testing.T) {
 		want: &PodAutoscaler{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					autoscaling.ClassAnnotationKey:  autoscaling.KPA,
-					autoscaling.MetricAnnotationKey: autoscaling.Concurrency,
+					autoscaling.ClassAnnotationKey:                 autoscaling.KPA,
+					autoscaling.MetricAnnotationKey:                autoscaling.Concurrency,
+					autoscaling.WindowAnnotationKey:                "1m0s",
+					autoscaling.WindowPanicPercentageAnnotationKey: "10",
+					autoscaling.TargetAnnotationKey:                "100",
+					autoscaling.TargetPanicPercentageAnnotationKey: "200",
 				},
 			},
 			Spec: PodAutoscalerSpec{
@@ -117,7 +134,109 @@ func TestPodAutoscalerDefaulting(t *testing.T) {
 				ContainerConcurrency: 0,
 			},
 		},
+	}, {
+		name: "preserve window",
+		in: &PodAutoscaler{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					autoscaling.WindowAnnotationKey: "2m0s",
+				},
+			},
+		},
+		want: &PodAutoscaler{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					autoscaling.ClassAnnotationKey:                 autoscaling.KPA,
+					autoscaling.MetricAnnotationKey:                autoscaling.Concurrency,
+					autoscaling.WindowAnnotationKey:                "2m0s",
+					autoscaling.WindowPanicPercentageAnnotationKey: "10",
+					autoscaling.TargetAnnotationKey:                "100",
+					autoscaling.TargetPanicPercentageAnnotationKey: "200",
+				},
+			},
+			Spec: PodAutoscalerSpec{
+				ContainerConcurrency: 0,
+			},
+		},
+	}, {
+		name: "preserve target",
+		in: &PodAutoscaler{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					autoscaling.TargetAnnotationKey: "9",
+				},
+			},
+		},
+		want: &PodAutoscaler{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					autoscaling.ClassAnnotationKey:                 autoscaling.KPA,
+					autoscaling.MetricAnnotationKey:                autoscaling.Concurrency,
+					autoscaling.WindowAnnotationKey:                "1m0s",
+					autoscaling.WindowPanicPercentageAnnotationKey: "10",
+					autoscaling.TargetAnnotationKey:                "9",
+					autoscaling.TargetPanicPercentageAnnotationKey: "200",
+				},
+			},
+			Spec: PodAutoscalerSpec{
+				ContainerConcurrency: 0,
+			},
+		},
+	}, {
+		name: "preserve window panic percentage",
+		in: &PodAutoscaler{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					autoscaling.WindowPanicPercentageAnnotationKey: "5",
+				},
+			},
+		},
+		want: &PodAutoscaler{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					autoscaling.ClassAnnotationKey:                 autoscaling.KPA,
+					autoscaling.MetricAnnotationKey:                autoscaling.Concurrency,
+					autoscaling.WindowAnnotationKey:                "1m0s",
+					autoscaling.WindowPanicPercentageAnnotationKey: "5",
+					autoscaling.TargetAnnotationKey:                "100",
+					autoscaling.TargetPanicPercentageAnnotationKey: "200",
+				},
+			},
+			Spec: PodAutoscalerSpec{
+				ContainerConcurrency: 0,
+			},
+		},
+	}, {
+		name: "preserve target panic percentage",
+		in: &PodAutoscaler{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					autoscaling.TargetPanicPercentageAnnotationKey: "300",
+				},
+			},
+		},
+		want: &PodAutoscaler{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					autoscaling.ClassAnnotationKey:                 autoscaling.KPA,
+					autoscaling.MetricAnnotationKey:                autoscaling.Concurrency,
+					autoscaling.WindowAnnotationKey:                "1m0s",
+					autoscaling.WindowPanicPercentageAnnotationKey: "10",
+					autoscaling.TargetAnnotationKey:                "100",
+					autoscaling.TargetPanicPercentageAnnotationKey: "300",
+				},
+			},
+			Spec: PodAutoscalerSpec{
+				ContainerConcurrency: 0,
+			},
+		},
 	}}
+
+	// Use autoscaler config defaults.
+	AutoscalerConfig, _ = config.NewDynamicConfigFromMap(map[string]string{}, nil)
+	defer func() {
+		AutoscalerConfig = nil
+	}()
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

@@ -195,7 +195,8 @@ func (pa *PodAutoscaler) Window() (window time.Duration, ok bool) {
 // WindowPanicPercentage returns panic window annotation value or false if not present.
 func (pa *PodAutoscaler) WindowPanicPercentage() (percentage float64, ok bool) {
 	percentage, ok = pa.annotationFloat64(autoscaling.WindowPanicPercentageAnnotationKey)
-	// Panic window cannot be bigger than stable window, or vanishingly small.
+	// Panic window cannot be bigger than stable window. Or vanishingly small
+	// (cannot divide by zero).
 	if !ok || percentage > 100.0 || percentage < 1.0 {
 		return 0, false
 	}

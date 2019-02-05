@@ -164,10 +164,13 @@ func (pa *PodAutoscaler) ScaleBounds() (min, max int32) {
 	return
 }
 
-// MetricTarget returns the metric annotation value or false if not present.
-func (pa *PodAutoscaler) MetricTarget() (target int32, ok bool) {
+// Target returns the target annotation value or false if not present.
+func (pa *PodAutoscaler) Target() (target int32, ok bool) {
 	if s, ok := pa.Annotations[autoscaling.TargetAnnotationKey]; ok {
 		if i, err := strconv.Atoi(s); err == nil {
+			if i < 1 {
+				return 0, false
+			}
 			return int32(i), true
 		}
 	}

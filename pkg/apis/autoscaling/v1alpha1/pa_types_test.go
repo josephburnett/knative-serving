@@ -22,6 +22,7 @@ import (
 	"github.com/knative/pkg/apis"
 	"github.com/knative/pkg/apis/duck"
 	duckv1alpha1 "github.com/knative/pkg/apis/duck/v1alpha1"
+	serving "github.com/knative/serving/pkg/apis/serving/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -330,6 +331,68 @@ func TestIsReady(t *testing.T) {
 			t.Errorf("%q expected: %v got: %v", tc.name, e, a)
 		}
 	}
+}
+
+func TestTargetAnnotation(t *testing.T) {
+	cases := []struct {
+		name       string
+		pa         *PodAutoscaler
+		wantTarget int32
+		wantOk     bool
+	}{{
+		name:       "not present",
+		pa:         pa(map[string]string{}),
+		wantTarget: 0,
+		wantOk:     false,
+	}, {
+		name: "present",
+		pa: pa(map[string]string{
+			"autoscaling.knative.dev/target": "1",
+		}),
+		wantTarget: 1,
+		wantOk:     true,
+	}, {
+		name: "invalid zero",
+		pa: pa(map[string]string{
+			"autoscaling.knative.dev/target": "0",
+		}),
+		wantTarget: 0,
+		wantOk:     false,
+	}, {
+		name: "invalid format",
+		pa: pa(map[string]string{
+			"autoscaling.knative.dev/target": "sandwich",
+		}),
+		wantTarget: 0,
+		wantOk:     false,
+	}}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotTarget, gotOk := tc.pa.Target()
+			if gotTarget != tc.wantTarget {
+				t.Errorf("%q expected target: %v got: %v", tc.name, tc.wantTarget, gotTarget)
+			}
+			if gotOk != tc.wantOk {
+				t.Errorf("%q expected ok: %v got %v", tc.name, tc.wantOk, gotOk)
+			}
+		})
+	}
+}
+
+func pa(annotations map[string]string) *PodAutoscaler {
+	p := &PodAutoscaler{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   "test-namespace",
+			Name:        "test-name",
+			Annotations: annotations,
+		},
+		Spec: PodAutoscalerSpec{
+			ContainerConcurrency: serving.RevisionContainerConcurrencyType(0),
+		},
+		Status: PodAutoscalerStatus{},
+	}
+	return p
 }
 
 func TestTypicalFlow(t *testing.T) {

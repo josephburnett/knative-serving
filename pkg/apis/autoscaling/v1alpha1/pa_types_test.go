@@ -427,6 +427,60 @@ func TestWindowAnnotation(t *testing.T) {
 	}
 }
 
+func TestWindowPanicPercentageAnnotation(t *testing.T) {
+	cases := []struct {
+		name           string
+		pa             *PodAutoscaler
+		wantPercentage float64
+		wantOk         bool
+	}{{
+		name:           "not present",
+		pa:             pa(map[string]string{}),
+		wantPercentage: 0.0,
+		wantOk:         false,
+	}, {
+		name: "present",
+		pa: pa(map[string]string{
+			"autoscaling.knative.dev/windowPanicPercentage": "10.0",
+		}),
+		wantPercentage: 10.0,
+		wantOk:         true,
+	}, {
+		name: "too large",
+		pa: pa(map[string]string{
+			"autoscaling.knative.dev/windowPanicPercentage": "100.0",
+		}),
+		wantPercentage: 0.0,
+		wantOk:         false,
+	}, {
+		name: "too small",
+		pa: pa(map[string]string{
+			"autoscaling.knative.dev/windowPanicPercentage": "0.0",
+		}),
+		wantPercentage: 0.0,
+		wantOk:         false,
+	}, {
+		name: "malformed",
+		pa: pa(map[string]string{
+			"autoscaling.knative.dev/windowPanicPercentage": "sandwich",
+		}),
+		wantPercentage: 0.0,
+		wantOk:         false,
+	}}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotPercentage, gotOk := tc.pa.WindowPanicPercentage()
+			if gotPercentage != tc.wantPercentage {
+				t.Errorf("%q expected target: %v got: %v", tc.name, tc.wantPercentage, gotPercentage)
+			}
+			if gotOk != tc.wantOk {
+				t.Errorf("%q expected ok: %v got %v", tc.name, tc.wantOk, gotOk)
+			}
+		})
+	}
+}
+
 func pa(annotations map[string]string) *PodAutoscaler {
 	p := &PodAutoscaler{
 		ObjectMeta: metav1.ObjectMeta{

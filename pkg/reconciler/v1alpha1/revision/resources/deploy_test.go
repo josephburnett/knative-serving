@@ -430,7 +430,7 @@ func TestMakePodSpec(t *testing.T) {
 		rev:  revision(withContainerConcurrency(1)),
 		lc:   &logging.Config{},
 		oc:   &config.Observability{},
-		ac:   &autoscaler.Config{},
+		ac:   &autoscalerConfig.Config{},
 		cc:   &config.Controller{},
 		want: podSpec([]corev1.Container{
 			userContainer(),

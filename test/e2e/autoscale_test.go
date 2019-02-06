@@ -28,7 +28,8 @@ import (
 
 	pkgTest "github.com/knative/pkg/test"
 	"github.com/knative/pkg/test/logging"
-	"github.com/knative/serving/pkg/autoscaler"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
+	. "github.com/knative/serving/pkg/reconciler/testing"
 	_ "github.com/knative/serving/pkg/system/testing"
 	"github.com/knative/serving/test"
 	"github.com/pkg/errors"
@@ -36,8 +37,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	. "github.com/knative/serving/pkg/reconciler/testing"
 )
 
 const (
@@ -137,8 +136,8 @@ func setup(t *testing.T) *testContext {
 	logger := logging.GetContextLogger(t.Name())
 	clients := Setup(t)
 
-	cm := ConfigMapFromTestFile(t, autoscaler.ConfigName)
-	cfg, err := autoscaler.NewConfigFromConfigMap(cm)
+	cm := ConfigMapFromTestFile(t, autoscalerConfig.ConfigName)
+	cfg, err := autoscalerConfig.NewConfigFromConfigMap(cm)
 	if err != nil {
 		t.Fatalf("NewConfigFromConfigMap() = %v", err)
 	}

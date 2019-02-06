@@ -141,7 +141,7 @@ func makePodSpec(rev *v1alpha1.Revision, loggingConfig *logging.Config, observab
 			*userContainer,
 			*makeQueueContainer(rev, loggingConfig, autoscalerConfig, controllerConfig),
 		},
-		Volumes:                       []corev1.Volume{varLogVolume},
+		Volumes:                       append([]corev1.Volume{varLogVolume}, rev.Spec.Volumes...),
 		ServiceAccountName:            rev.Spec.ServiceAccountName,
 		TerminationGracePeriodSeconds: &revisionTimeout,
 	}

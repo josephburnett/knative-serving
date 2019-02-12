@@ -36,6 +36,7 @@ import (
 	"github.com/knative/serving/pkg/system"
 	_ "github.com/knative/serving/pkg/system/testing"
 	"go.uber.org/atomic"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -118,14 +119,11 @@ func TestControllerSynchronizesCreatesAndDeletes(t *testing.T) {
 	kpa := revisionresources.MakeKPA(rev)
 	servingClient.AutoscalingV1alpha1().PodAutoscalers(testNamespace).Create(kpa)
 	servingInformer.Autoscaling().V1alpha1().PodAutoscalers().Informer().GetIndexer().Add(kpa)
-	reconcileDone := make(chan struct{})
-	go func() {
-		defer close(reconcileDone)
-		err := ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
-		if err != nil {
-			t.Errorf("Reconcile() = %v", err)
-		}
-	}()
+
+	reconcileGrp := errgroup.Group{}
+	reconcileGrp.Go(func() error {
+		return ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
+	})
 
 	// Ensure revision creation has been seen before deleting it.
 	select {
@@ -135,7 +133,9 @@ func TestControllerSynchronizesCreatesAndDeletes(t *testing.T) {
 	}
 
 	// Wait for the Reconcile to complete.
-	_ = <-reconcileDone
+	if err := reconcileGrp.Wait(); err != nil {
+		t.Errorf("Reconcile() = %v", err)
+	}
 
 	if count := fakeMetrics.createCallCount.Load(); count != 1 {
 		t.Fatalf("Create called %d times instead of once", count)
@@ -154,8 +154,7 @@ func TestControllerSynchronizesCreatesAndDeletes(t *testing.T) {
 	servingInformer.Serving().V1alpha1().Revisions().Informer().GetIndexer().Delete(rev)
 	servingClient.AutoscalingV1alpha1().PodAutoscalers(testNamespace).Delete(testRevision, nil)
 	servingInformer.Autoscaling().V1alpha1().PodAutoscalers().Informer().GetIndexer().Delete(kpa)
-	err = ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
-	if err != nil {
+	if err := ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision); err != nil {
 		t.Errorf("Reconcile() = %v", err)
 	}
 
@@ -206,14 +205,11 @@ func TestUpdate(t *testing.T) {
 	kpa := revisionresources.MakeKPA(rev)
 	servingClient.AutoscalingV1alpha1().PodAutoscalers(testNamespace).Create(kpa)
 	servingInformer.Autoscaling().V1alpha1().PodAutoscalers().Informer().GetIndexer().Add(kpa)
-	reconcileDone := make(chan struct{})
-	go func() {
-		defer close(reconcileDone)
-		err := ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
-		if err != nil {
-			t.Errorf("Reconcile() = %v", err)
-		}
-	}()
+
+	reconcileGrp := errgroup.Group{}
+	reconcileGrp.Go(func() error {
+		return ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
+	})
 
 	// Ensure revision creation has been seen before updating it.
 	select {
@@ -223,7 +219,9 @@ func TestUpdate(t *testing.T) {
 	}
 
 	// Wait for the Reconcile to complete.
-	_ = <-reconcileDone
+	if err := reconcileGrp.Wait(); err != nil {
+		t.Errorf("Reconcile() = %v", err)
+	}
 
 	if count := fakeMetrics.createCallCount.Load(); count != 1 {
 		t.Fatalf("Create called %d times instead of once", count)
@@ -243,15 +241,9 @@ func TestUpdate(t *testing.T) {
 	servingClient.AutoscalingV1alpha1().PodAutoscalers(testNamespace).Update(kpa)
 	servingInformer.Autoscaling().V1alpha1().PodAutoscalers().Informer().GetIndexer().Update(kpa)
 
-	reconcileDone = make(chan struct{})
-	go func() {
-		defer close(reconcileDone)
-		err = ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
-		if err != nil {
-			t.Errorf("Reconcile() = %v", err)
-		}
-	}()
-	_ = <-reconcileDone
+	if err := ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision); err != nil {
+		t.Errorf("Reconcile() = %v", err)
+	}
 
 	if fakeMetrics.updateCallCount.Load() == 0 {
 		t.Fatal("Update was not called")
@@ -297,18 +289,21 @@ func TestNonKpaClass(t *testing.T) {
 	kpa := revisionresources.MakeKPA(rev)
 	servingClient.AutoscalingV1alpha1().PodAutoscalers(testNamespace).Create(kpa)
 	servingInformer.Autoscaling().V1alpha1().PodAutoscalers().Informer().GetIndexer().Add(kpa)
-	reconcileDone := make(chan struct{})
+
+	reconcileCh := make(chan error)
 	go func() {
-		defer close(reconcileDone)
-		err := ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
-		if err != nil {
-			t.Errorf("Reconcile() = %v", err)
+		defer close(reconcileCh)
+		if err := ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision); err != nil {
+			reconcileCh <- err
 		}
 	}()
 
 	// Wait for reconcile to finish
 	select {
-	case <-reconcileDone:
+	case err, ok := <-reconcileCh:
+		if ok && err != nil {
+			t.Errorf("Reconcile() = %v", err)
+		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("Reconciliation timed out")
 	}
@@ -358,18 +353,17 @@ func TestNoEndpoints(t *testing.T) {
 	kpa := revisionresources.MakeKPA(rev)
 	servingClient.AutoscalingV1alpha1().PodAutoscalers(testNamespace).Create(kpa)
 	servingInformer.Autoscaling().V1alpha1().PodAutoscalers().Informer().GetIndexer().Add(kpa)
-	reconcileDone := make(chan struct{})
-	go func() {
-		defer close(reconcileDone)
-		err := ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
-		if err != nil {
-			t.Errorf("Reconcile() = %v", err)
-		}
-	}()
+
+	reconcileGrp := errgroup.Group{}
+	reconcileGrp.Go(func() error {
+		return ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
+	})
 
 	// Wait for the Reconcile to complete.
-	_ = <-createdCh
-	_ = <-reconcileDone
+	<-createdCh
+	if err := reconcileGrp.Wait(); err != nil {
+		t.Errorf("Reconcile() = %v", err)
+	}
 
 	newKPA, err := servingClient.AutoscalingV1alpha1().PodAutoscalers(kpa.Namespace).Get(
 		kpa.Name, metav1.GetOptions{})
@@ -420,18 +414,17 @@ func TestEmptyEndpoints(t *testing.T) {
 	kpa := revisionresources.MakeKPA(rev)
 	servingClient.AutoscalingV1alpha1().PodAutoscalers(testNamespace).Create(kpa)
 	servingInformer.Autoscaling().V1alpha1().PodAutoscalers().Informer().GetIndexer().Add(kpa)
-	reconcileDone := make(chan struct{})
-	go func() {
-		defer close(reconcileDone)
-		err := ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
-		if err != nil {
-			t.Errorf("Reconcile() = %v", err)
-		}
-	}()
+
+	reconcileGrp := errgroup.Group{}
+	reconcileGrp.Go(func() error {
+		return ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
+	})
 
 	// Wait for the Reconcile to complete.
-	_ = <-createdCh
-	_ = <-reconcileDone
+	<-createdCh
+	if err := reconcileGrp.Wait(); err != nil {
+		t.Errorf("Reconcile() = %v", err)
+	}
 
 	newKPA, err := servingClient.AutoscalingV1alpha1().PodAutoscalers(kpa.Namespace).Get(
 		kpa.Name, metav1.GetOptions{})
@@ -592,18 +585,21 @@ func TestScaleFailure(t *testing.T) {
 	rev := newTestRevision(testNamespace, testRevision)
 	kpa := revisionresources.MakeKPA(rev)
 	servingInformer.Autoscaling().V1alpha1().PodAutoscalers().Informer().GetIndexer().Add(kpa)
-	go func() {
-		err := ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
-		if err == nil {
-			t.Error("Reconcile() = nil, wanted error")
-		}
-	}()
+
+	reconcileGrp := errgroup.Group{}
+	reconcileGrp.Go(func() error {
+		return ctl.Reconciler.Reconcile(context.TODO(), testNamespace+"/"+testRevision)
+	})
 
 	// Ensure revision creation has been seen before deleting it.
 	select {
 	case <-createdCh:
 	case <-time.After(3 * time.Second):
 		t.Fatal("Revision creation notification timed out")
+	}
+
+	if err := reconcileGrp.Wait(); err == nil {
+		t.Error("Reconcile() = nil, wanted error")
 	}
 }
 

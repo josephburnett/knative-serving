@@ -113,6 +113,12 @@ type PodAutoscalerStatus struct {
 	// state of the world.
 	// +optional
 	Conditions duckv1alpha1.Conditions `json:"conditions,omitempty"`
+
+	// ObservedGeneration is the 'Generation' of the PodAutoscaler that
+	// was last processed by the controller. The observed generation is updated
+	// even if the controller failed to process the spec.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -141,6 +147,9 @@ func (pa *PodAutoscaler) annotationInt32(key string) int32 {
 	if s, ok := pa.Annotations[key]; ok {
 		// no error check: relying on validation
 		i, _ := strconv.ParseInt(s, 10, 32)
+		if i < 0 {
+			return 0
+		}
 		return int32(i)
 	}
 	return 0
@@ -253,6 +262,13 @@ func (rs *PodAutoscalerStatus) MarkInactive(reason, message string) {
 func (rs *PodAutoscalerStatus) MarkResourceNotOwned(kind, name string) {
 	rs.MarkInactive("NotOwned",
 		fmt.Sprintf("There is an existing %s %q that we do not own.", kind, name))
+}
+
+// MarkResourceFailedCreation changes the "Active" condition to false to reflect that a
+// critical resource of the given kind and name was unable to be created.
+func (rs *PodAutoscalerStatus) MarkResourceFailedCreation(kind, name string) {
+	rs.MarkInactive("FailedCreate",
+		fmt.Sprintf("Failed to create %s %q.", kind, name))
 }
 
 // CanScaleToZero checks whether the pod autoscaler has been in an inactive state

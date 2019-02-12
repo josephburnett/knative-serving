@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/knative/pkg/logging"
+	"github.com/knative/serving/pkg/autoscaler/config"
 	"go.uber.org/zap"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -204,7 +205,7 @@ func (agg *perPodAggregation) podWeight(now time.Time) float64 {
 
 // Autoscaler stores current state of an instance of an autoscaler
 type Autoscaler struct {
-	*DynamicConfig
+	*config.DynamicConfig
 	key             string
 	namespace       string
 	revisionService string
@@ -215,8 +216,8 @@ type Autoscaler struct {
 	reporter        StatsReporter
 
 	// targetMutex guards the elements in the block below.
-	targetMutex sync.RWMutex
-	target      float64
+	specMutex sync.RWMutex
+	spec      MetricSpec
 
 	// statsMutex guards the elements in the block below.
 	statsMutex sync.Mutex
@@ -225,11 +226,11 @@ type Autoscaler struct {
 
 // New creates a new instance of autoscaler
 func New(
-	dynamicConfig *DynamicConfig,
+	dynamicConfig *config.DynamicConfig,
 	namespace string,
 	revisionService string,
 	endpointsInformer corev1informers.EndpointsInformer,
-	target float64,
+	spec MetricSpec,
 	reporter StatsReporter) (*Autoscaler, error) {
 	if endpointsInformer == nil {
 		return nil, errors.New("Empty interface of EndpointsInformer")
@@ -239,7 +240,7 @@ func New(
 		namespace:       namespace,
 		revisionService: revisionService,
 		endpointsLister: endpointsInformer.Lister(),
-		target:          target,
+		spec:            spec,
 		stats:           make(map[statKey]Stat),
 		reporter:        reporter,
 	}, nil
@@ -247,9 +248,9 @@ func New(
 
 // Update reconfigures the UniScaler according to the MetricSpec.
 func (a *Autoscaler) Update(spec MetricSpec) error {
-	a.targetMutex.Lock()
-	defer a.targetMutex.Unlock()
-	a.target = spec.TargetConcurrency
+	a.specMutex.Lock()
+	defer a.specMutex.Unlock()
+	a.spec = spec
 	return nil
 }
 
@@ -281,9 +282,10 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 		return 0, false
 	}
 
-	config := a.Current()
+	a.specMutex.RLock()
+	defer a.specMutex.RUnlock()
 
-	stableData, panicData, lastStat := a.aggregateData(now, config.StableWindow, config.PanicWindow)
+	stableData, panicData, lastStat := a.aggregateData(now, a.spec.Window, a.spec.WindowPanic)
 	observedStablePods := stableData.observedPods(now)
 	// Do nothing when we have no data.
 	if observedStablePods < 1.0 {
@@ -306,24 +308,23 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	observedStableConcurrencyPerPod := stableData.observedConcurrencyPerPod(now)
 	observedPanicConcurrencyPerPod := panicData.observedConcurrencyPerPod(now)
 
-	target := a.targetConcurrency()
 	// Desired pod count is observed concurrency of revision over desired (stable) concurrency per pod.
 	// The scaling up rate limited to within MaxScaleUpRate.
-	desiredStablePodCount := a.podCountLimited(observedStableConcurrency/target, readyPods)
-	desiredPanicPodCount := a.podCountLimited(observedPanicConcurrency/target, readyPods)
+	desiredStablePodCount := a.podCountLimited(observedStableConcurrency/a.spec.TargetConcurrency, readyPods)
+	desiredPanicPodCount := a.podCountLimited(observedPanicConcurrency/a.spec.TargetConcurrency, readyPods)
 
 	a.reporter.ReportObservedPodCount(observedStablePods)
 	a.reporter.ReportStableRequestConcurrency(observedStableConcurrencyPerPod)
 	a.reporter.ReportPanicRequestConcurrency(observedPanicConcurrencyPerPod)
-	a.reporter.ReportTargetRequestConcurrency(target)
+	a.reporter.ReportTargetRequestConcurrency(a.spec.TargetConcurrency)
 
 	logger.Debugf("STABLE: Observed average %0.3f concurrency over %v seconds over %v samples over %v pods.",
-		observedStableConcurrencyPerPod, config.StableWindow, stableData.probeCount, observedStablePods)
+		observedStableConcurrencyPerPod, a.spec.Window, stableData.probeCount, observedStablePods)
 	logger.Debugf("PANIC: Observed average %0.3f concurrency over %v seconds over %v samples over %v pods.",
-		observedPanicConcurrencyPerPod, config.PanicWindow, panicData.probeCount, observedPanicPods)
+		observedPanicConcurrencyPerPod, a.spec.WindowPanic, panicData.probeCount, observedPanicPods)
 
 	// Stop panicking after the surge has made its way into the stable metric.
-	if a.panicking && a.panicTime.Add(config.StableWindow).Before(now) {
+	if a.panicking && a.panicTime.Add(a.spec.Window).Before(now) {
 		logger.Info("Un-panicking.")
 		a.panicking = false
 		a.panicTime = nil
@@ -331,7 +332,7 @@ func (a *Autoscaler) Scale(ctx context.Context, now time.Time) (int32, bool) {
 	}
 
 	// Begin panicking when we cross the 6 second concurrency threshold.
-	if !a.panicking && observedPanicPods > 0.0 && observedPanicConcurrencyPerPod >= (target*2) {
+	if !a.panicking && observedPanicPods > 0.0 && observedPanicConcurrencyPerPod >= (a.spec.TargetConcurrencyPanic) {
 		logger.Info("PANICKING")
 		a.panicking = true
 		a.panicTime = &now
@@ -393,12 +394,6 @@ func (a *Autoscaler) aggregateData(now time.Time, stableWindow, panicWindow time
 		}
 	}
 	return stableData, panicData, lastStat
-}
-
-func (a *Autoscaler) targetConcurrency() float64 {
-	a.targetMutex.RLock()
-	defer a.targetMutex.RUnlock()
-	return a.target
 }
 
 func (a *Autoscaler) podCountLimited(desiredPodCount, currentPodCount float64) float64 {

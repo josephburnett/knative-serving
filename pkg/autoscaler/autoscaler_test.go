@@ -22,6 +22,7 @@ import (
 	"time"
 
 	. "github.com/knative/pkg/logging/testing"
+	autoscalerConfig "github.com/knative/serving/pkg/autoscaler/config"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,12 +42,12 @@ var (
 )
 
 func TestNew_ErrorWhenGivenEmptyInterface(t *testing.T) {
-	dynConfig := &DynamicConfig{}
+	dynConfig := &autoscalerConfig.DynamicConfig{}
 	var endpointsInformer corev1informers.EndpointsInformer
 
-	_, err := New(dynConfig, testNamespace, testService, endpointsInformer, 10, &mockReporter{})
+	_, err := New(dynConfig, testNamespace, testService, endpointsInformer, MetricSpec{}, &mockReporter{})
 	if err == nil {
-		t.Error("Expected error when EndpointsInformer interface is empty, but got none.")
+		t.Error("Expected error when EndpointsInformer interface is emtpy, but got none.")
 	}
 }
 
@@ -63,7 +64,7 @@ func TestAutoscaler_NoDataAtZero_NoAutoscale(t *testing.T) {
 		linearSeries{
 			startConcurrency: 0,
 			endConcurrency:   0,
-			duration:         stableWindow,
+			duration:         300, // 5 minutes
 			podCount:         1,
 		})
 
@@ -139,15 +140,15 @@ func TestAutoscaler_StableModeNoTraffic_ScaleToZero(t *testing.T) {
 			duration:         stableWindow,
 			podCount:         1,
 		})
-	a.expectScale(t, now, 1, true)
 
+	a.expectScale(t, now, 1, true)
 	now = a.recordLinearSeries(
 		t,
 		now,
 		linearSeries{
 			startConcurrency: 0,
 			endConcurrency:   0,
-			duration:         stableWindow,
+			duration:         300, // 5 minutes
 			podCount:         1,
 		})
 	a.expectScale(t, now, 0, true)
@@ -291,7 +292,7 @@ func TestAutoscaler_PanicThenUnPanic_ScaleDown(t *testing.T) {
 		linearSeries{
 			startConcurrency: 1, // traffic drops off
 			endConcurrency:   1,
-			duration:         30 * time.Second,
+			duration:         30,
 			podCount:         100,
 		})
 	a.expectScale(t, now, 100, true) // still in panic mode--no decrease
@@ -301,7 +302,7 @@ func TestAutoscaler_PanicThenUnPanic_ScaleDown(t *testing.T) {
 		linearSeries{
 			startConcurrency: 1,
 			endConcurrency:   1,
-			duration:         31 * time.Second,
+			duration:         31,
 			podCount:         100,
 		})
 	a.expectScale(t, now, 10, true) // back to stable mode
@@ -315,7 +316,7 @@ func TestAutoscaler_NoScaleOnLessThanOnePod(t *testing.T) {
 		linearSeries{
 			startConcurrency: 10,
 			endConcurrency:   10,
-			duration:         10 * time.Second, // 10 seconds of 2 pods
+			duration:         10, // 10 seconds of 2 pods
 			podCount:         2,
 		})
 	now = now.Add(50 * time.Second)
@@ -330,7 +331,7 @@ func TestAutoscaler_PodsAreWeightedBasedOnLatestStatTime(t *testing.T) {
 		linearSeries{
 			startConcurrency: 10,
 			endConcurrency:   10,
-			duration:         30 * time.Second,
+			duration:         30,
 			podCount:         10,
 		})
 	now = now.Add(30 * time.Second)
@@ -380,7 +381,7 @@ func TestAutoscaler_Activator_IsIgnored(t *testing.T) {
 		linearSeries{
 			startConcurrency: 10,
 			endConcurrency:   10,
-			duration:         30 * time.Second,
+			duration:         30,
 			podCount:         10,
 		})
 
@@ -445,14 +446,13 @@ func TestAutoscaler_Stats_DenyNoTime(t *testing.T) {
 
 func TestAutoscaler_RateLimit_ScaleUp(t *testing.T) {
 	a := newTestAutoscaler(10.0)
-
 	now := a.recordLinearSeries(
 		t,
 		time.Now(),
 		linearSeries{
 			startConcurrency: 1000,
 			endConcurrency:   1000,
-			duration:         time.Second,
+			duration:         1,
 			podCount:         1,
 		})
 
@@ -465,7 +465,7 @@ func TestAutoscaler_RateLimit_ScaleUp(t *testing.T) {
 		linearSeries{
 			startConcurrency: 1000,
 			endConcurrency:   1000,
-			duration:         time.Second,
+			duration:         1,
 			podCount:         10,
 		})
 
@@ -520,9 +520,68 @@ func TestAutoscaler_UpdateTarget(t *testing.T) {
 		})
 	a.expectScale(t, now, 10, true)
 	a.Update(MetricSpec{
-		TargetConcurrency: 1.0,
+		TargetConcurrency:      1.0,
+		TargetConcurrencyPanic: 2.0,
+		Window:                 a.spec.Window,
+		WindowPanic:            a.spec.WindowPanic,
 	})
 	a.expectScale(t, now, 100, true)
+}
+
+func TestAutoscaler_UpdateIncreaseWindow(t *testing.T) {
+	a := newTestAutoscaler(10.0)
+	now := a.recordLinearSeries(
+		t,
+		time.Now(),
+		linearSeries{
+			startConcurrency: 10,
+			endConcurrency:   10,
+			duration:         stableWindow,
+			podCount:         10,
+		})
+	a.expectScale(t, now, 10, true)
+	a.Update(MetricSpec{
+		TargetConcurrency:      a.spec.TargetConcurrency,
+		TargetConcurrencyPanic: a.spec.TargetConcurrencyPanic,
+		Window:                 a.spec.Window * 2,
+		WindowPanic:            a.spec.WindowPanic * 2,
+	})
+	// Increasing the window retains all data and the desired scale
+	// will not change.
+	a.expectScale(t, now, 10, true)
+}
+
+func TestAutoscaler_UpdateDecreaseWindow(t *testing.T) {
+	a := newTestAutoscaler(10.0)
+	now := a.recordLinearSeries(
+		t,
+		time.Now(),
+		linearSeries{
+			startConcurrency: 30,
+			endConcurrency:   30,
+			duration:         30,
+			podCount:         10,
+		})
+	now = a.recordLinearSeries(
+		t,
+		now,
+		linearSeries{
+			startConcurrency: 10,
+			endConcurrency:   10,
+			duration:         30,
+			podCount:         10,
+		})
+	// Average concurrency is 20.
+	a.expectScale(t, now, 20, true)
+	a.Update(MetricSpec{
+		TargetConcurrency:      a.spec.TargetConcurrency,
+		TargetConcurrencyPanic: a.spec.TargetConcurrencyPanic,
+		Window:                 a.spec.Window / 2,
+		WindowPanic:            a.spec.WindowPanic / 2,
+	})
+	// Decreasing the window will truncate older data, in this case
+	// the higher concurrency reading of 30.
+	a.expectScale(t, now, 10, true)
 }
 
 type linearSeries struct {
@@ -577,21 +636,31 @@ func (r *mockReporter) ReportPanic(v int64) error {
 
 func newTestAutoscaler(containerConcurrency int) *Autoscaler {
 	scaleToZeroGracePeriod := 30 * time.Second
-	config := &Config{
+	config := &autoscalerConfig.Config{
 		ContainerConcurrencyTargetPercentage: 1.0, // targeting 100% makes the test easier to read
 		ContainerConcurrencyTargetDefault:    10.0,
 		MaxScaleUpRate:                       10.0,
 		StableWindow:                         stableWindow,
 		PanicWindow:                          panicWindow,
+		WindowPanicPercentage:                10.0,
+		TargetPanicPercentage:                200.0,
 		ScaleToZeroGracePeriod:               scaleToZeroGracePeriod,
 	}
 
-	dynConfig := &DynamicConfig{
-		config: config,
-		logger: zap.NewNop().Sugar(),
-	}
+	dynConfig := autoscalerConfig.NewDynamicConfig(config, zap.NewNop().Sugar())
 
-	a, _ := New(dynConfig, testNamespace, testService, kubeInformer.Core().V1().Endpoints(), float64(containerConcurrency), &mockReporter{})
+	a, _ := New(
+		dynConfig,
+		testNamespace,
+		testService,
+		kubeInformer.Core().V1().Endpoints(),
+		MetricSpec{
+			TargetConcurrency:      float64(containerConcurrency),
+			TargetConcurrencyPanic: float64(containerConcurrency) * 2,
+			Window:                 stableWindow,
+			WindowPanic:            panicWindow,
+		},
+		&mockReporter{})
 	return a
 }
 
@@ -600,7 +669,7 @@ func newTestAutoscaler(containerConcurrency int) *Autoscaler {
 func (a *Autoscaler) recordLinearSeries(test *testing.T, now time.Time, s linearSeries) time.Time {
 	points := make([]int32, 0)
 	for i := 1; i <= int(s.duration.Seconds()); i++ {
-		points = append(points, int32(float64(s.startConcurrency)+float64(s.endConcurrency-s.startConcurrency)*(float64(i)/s.duration.Seconds())))
+		points = append(points, int32(float64(s.startConcurrency)+float64(s.endConcurrency-s.startConcurrency)*(float64(i)/float64(s.duration.Seconds()))))
 	}
 	test.Logf("Recording points: %v.", points)
 	for _, point := range points {

@@ -16,7 +16,7 @@ var _ skplug.Plugin = &pluginServer{}
 
 type pluginServer struct {
 	mux sync.RWMutex
-	map[string]*plugin.Autoscaler
+	autoscalers map[string]*plugin.Autoscaler
 }
 
 func newPluginServer() *pluginServer {

@@ -3,9 +3,10 @@ package main
 import (
 	"sync"
 
-	"knative.dev/serving/pkg/plugin"
+	knativeplugin "knative.dev/serving/pkg/plugin"
 	"github.com/josephburnett/sk-plugin/pkg/skplug"
 	"github.com/josephburnett/sk-plugin/pkg/skplug/proto"
+	"github.com/hashicorp/go-plugin"
 )
 
 const (
@@ -16,7 +17,7 @@ var _ skplug.Plugin = &pluginServer{}
 
 type pluginServer struct {
 	mux sync.RWMutex
-	autoscalers map[string]*plugin.Autoscaler
+	autoscalers map[string]*knativeplugin.Autoscaler
 }
 
 func newPluginServer() *pluginServer {
@@ -36,5 +37,13 @@ func (p *pluginServer) Scale(part string, time int64) (rec int32, err error) {
 }
 
 func main() {
+	plugin.Serve(&plugin.ServeConfig{
+		HandshakeConfig: skplug.Handshake,
+		Plugins: map[string]plugin.Plugin{
+			"autoscaler": &skplug.AutoscalerPlugin{Impl: newPluginServer()},
+		},
 
+		// A non-nil value here enables gRPC serving for this plugin...
+		GRPCServer: plugin.DefaultGRPCServer,
+	})
 }

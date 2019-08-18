@@ -1,18 +1,18 @@
 package plugin
 
 import (
-	"time"
 	"context"
-	
+	"time"
+
 	"github.com/josephburnett/sk-plugin/pkg/skplug/proto"
-	"knative.dev/serving/pkg/resources"
-	"knative.dev/serving/pkg/autoscaler"
 	"k8s.io/apimachinery/pkg/types"
+	"knative.dev/serving/pkg/autoscaler"
+	"knative.dev/serving/pkg/resources"
 )
 
 type Autoscaler struct {
 	autoscaler *autoscaler.Autoscaler
-	collector *autoscaler.MetricCollector
+	collector  *autoscaler.MetricCollector
 }
 
 func NewAutoscaler(yaml string) (*Autoscaler, error) {
@@ -20,8 +20,8 @@ func NewAutoscaler(yaml string) (*Autoscaler, error) {
 	a, err := autoscaler.New(
 		"default",
 		"autoscaler",
-		&fakeMetricClient{}, // TODO: provide metric collector
-		&fakeReadyPodCounter{}, // TODO: provide count of pods
+		&fakeMetricClient{},      // TODO: provide metric collector
+		&fakeReadyPodCounter{},   // TODO: provide count of pods
 		autoscaler.DeciderSpec{}, // TODO: parse PodAutoscaler
 		&fakeStatsReporter{},
 	)
@@ -40,13 +40,13 @@ func (a *Autoscaler) Stat(stats []*proto.Stat) error {
 		}
 		t := time.Unix(0, s.Time)
 		stat := autoscaler.Stat{
-			Time: &t,
-			PodName: s.PodName,
+			Time:                      &t,
+			PodName:                   s.PodName,
 			AverageConcurrentRequests: float64(s.Value),
 		}
 		a.collector.Record(types.NamespacedName{
 			Namespace: "default",
-			Name: "autoscaler",
+			Name:      "autoscaler",
 		}, stat)
 	}
 	return nil
@@ -75,7 +75,6 @@ func (f *fakeMetricClient) StableAndPanicOPS(key types.NamespacedName, now time.
 var _ resources.ReadyPodCounter = &fakeReadyPodCounter{}
 
 type fakeReadyPodCounter struct {
-	
 }
 
 func (f *fakeReadyPodCounter) ReadyCount() (int, error) {
@@ -85,7 +84,7 @@ func (f *fakeReadyPodCounter) ReadyCount() (int, error) {
 
 var _ autoscaler.StatsReporter = &fakeStatsReporter{}
 
-type fakeStatsReporter struct {}
+type fakeStatsReporter struct{}
 
 func (f *fakeStatsReporter) ReportDesiredPodCount(v int64) error {
 	return nil
@@ -118,4 +117,3 @@ func (f *fakeStatsReporter) ReportExcessBurstCapacity(v float64) error {
 func (f *fakeStatsReporter) ReportPanic(v int64) error {
 	return nil
 }
-

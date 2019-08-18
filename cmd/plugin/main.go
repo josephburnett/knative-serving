@@ -1,14 +1,14 @@
 package main
 
 import (
-	"sync"
 	"fmt"
 	"log"
+	"sync"
 
-	knativeplugin "knative.dev/serving/pkg/plugin"
+	"github.com/hashicorp/go-plugin"
 	"github.com/josephburnett/sk-plugin/pkg/skplug"
 	"github.com/josephburnett/sk-plugin/pkg/skplug/proto"
-	"github.com/hashicorp/go-plugin"
+	knativeplugin "knative.dev/serving/pkg/plugin"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 var _ skplug.Plugin = &pluginServer{}
 
 type pluginServer struct {
-	mux sync.RWMutex
+	mux         sync.RWMutex
 	autoscalers map[string]*knativeplugin.Autoscaler
 }
 

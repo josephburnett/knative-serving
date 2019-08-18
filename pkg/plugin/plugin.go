@@ -2,8 +2,10 @@ package plugin
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/josephburnett/sk-plugin/pkg/skplug"
 	"github.com/josephburnett/sk-plugin/pkg/skplug/proto"
 	"k8s.io/apimachinery/pkg/types"
 	"knative.dev/serving/pkg/autoscaler"
@@ -13,6 +15,7 @@ import (
 type Autoscaler struct {
 	autoscaler *autoscaler.Autoscaler
 	collector  *autoscaler.MetricCollector
+	pods       map[string]*skplug.Pod
 }
 
 func NewAutoscaler(yaml string) (*Autoscaler, error) {
@@ -30,6 +33,7 @@ func NewAutoscaler(yaml string) (*Autoscaler, error) {
 	}
 	return &Autoscaler{
 		autoscaler: a,
+		pods:       make(map[string]*skplug.Pod),
 	}, nil
 }
 
@@ -55,6 +59,30 @@ func (a *Autoscaler) Stat(stats []*proto.Stat) error {
 func (a *Autoscaler) Scale(now int64) (int32, error) {
 	desiredPodCount, _, _ := a.autoscaler.Scale(context.TODO(), time.Unix(0, now))
 	return desiredPodCount, nil
+}
+
+func (a *Autoscaler) CreatePod(p *skplug.Pod) error {
+	if _, ok := a.pods[p.Name]; ok {
+		return fmt.Errorf("duplicate create pod: %v", p.Name)
+	}
+	a.pods[p.Name] = p
+	return nil
+}
+
+func (a *Autoscaler) UpdatePod(p *skplug.Pod) error {
+	if _, ok := a.pods[p.Name]; !ok {
+		return fmt.Errorf("update non-existant pod: %v", p.Name)
+	}
+	a.pods[p.Name] = p
+	return nil
+}
+
+func (a *Autoscaler) DeletePod(p *skplug.Pod) error {
+	if _, ok := a.pods[p.Name]; !ok {
+		return fmt.Errorf("delete non-existant pod: %v", p.Name)
+	}
+	delete(a.pods, p.Name)
+	return nil
 }
 
 var _ autoscaler.MetricClient = &fakeMetricClient{}

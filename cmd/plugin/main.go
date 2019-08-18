@@ -42,8 +42,16 @@ func (p *pluginServer) Event(part string, time int64, typ proto.EventType, objec
 			return fmt.Errorf("unhandled event type: %v for object of type: %T", typ, object)
 		}
 	case *skplug.Pod:
-		// TODO: keep track of Pods.
-		return nil
+		switch typ {
+		case proto.EventType_CREATE:
+			return p.createPod(part, o)
+		case proto.EventType_UPDATE:
+			return p.updatePod(part, o)
+		case proto.EventType_DELETE:
+			return p.deletePod(part, o)
+		default:
+			return fmt.Errorf("unhandled event type: %v for object of type: %T", typ, object)
+		}
 	default:
 		return fmt.Errorf("unhandled object type: %T", object)
 	}
@@ -81,6 +89,36 @@ func (p *pluginServer) deleteAutoscaler(part string) error {
 	delete(p.autoscalers, part)
 	log.Println("deleted autoscaler", part)
 	return nil
+}
+
+func (p *pluginServer) createPod(part string, o *skplug.Pod) error {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	a, ok := p.autoscalers[part]
+	if !ok {
+		return fmt.Errorf("create pod for non-existant partition: %v", part)
+	}
+	return a.CreatePod(o)
+}
+
+func (p *pluginServer) updatePod(part string, o *skplug.Pod) error {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	a, ok := p.autoscalers[part]
+	if !ok {
+		return fmt.Errorf("update pod for non-existant partition: %v", part)
+	}
+	return a.UpdatePod(o)
+}
+
+func (p *pluginServer) deletePod(part string, o *skplug.Pod) error {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	a, ok := p.autoscalers[part]
+	if !ok {
+		return fmt.Errorf("delete pod for non-existant partition: %v", part)
+	}
+	return a.DeletePod(o)
 }
 
 func main() {

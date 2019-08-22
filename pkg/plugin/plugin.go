@@ -7,6 +7,7 @@ import (
 
 	"github.com/josephburnett/sk-plugin/pkg/skplug"
 	"github.com/josephburnett/sk-plugin/pkg/skplug/proto"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/types"
 	av1alpha1 "knative.dev/serving/pkg/apis/autoscaling/v1alpha1"
 	"knative.dev/serving/pkg/autoscaler"
@@ -21,11 +22,15 @@ type Autoscaler struct {
 }
 
 func NewAutoscaler(yaml string) (*Autoscaler, error) {
-	c := autoscaler.NewMetricCollector(fakeStatsScraperFactory, nil)
+	c := autoscaler.NewMetricCollector(fakeStatsScraperFactory, zap.NewNop().Sugar())
+	err := c.CreateOrUpdate(&av1alpha1.Metric{})
+	if err != nil {
+		return nil, err
+	}
 	a, err := autoscaler.New(
 		"default",
 		"autoscaler",
-		&fakeMetricClient{},      // TODO: provide metric collector
+		c,
 		&fakeReadyPodCounter{},   // TODO: provide count of pods
 		autoscaler.DeciderSpec{}, // TODO: parse PodAutoscaler
 		&fakeStatsReporter{},

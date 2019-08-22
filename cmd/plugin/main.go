@@ -67,8 +67,14 @@ func (p *pluginServer) Stat(part string, stat []*proto.Stat) error {
 	return autoscaler.Stat(stat)
 }
 
-func (p *pluginServer) Scale(part string, time int64) (rec int32, err error) {
-	return 0, nil
+func (p *pluginServer) Scale(part string, now int64) (rec int32, err error) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	autoscaler, ok := p.autoscalers[part]
+	if !ok {
+		return 0, fmt.Errorf("scale for non-existant partition: %v", part)
+	}
+	return autoscaler.Scale(now)
 }
 
 func (p *pluginServer) createAutoscaler(part string, a *skplug.Autoscaler) error {

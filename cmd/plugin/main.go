@@ -58,7 +58,13 @@ func (p *pluginServer) Event(part string, time int64, typ proto.EventType, objec
 }
 
 func (p *pluginServer) Stat(part string, stat []*proto.Stat) error {
-	return nil
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	autoscaler, ok := p.autoscalers[part]
+	if !ok {
+		return fmt.Errorf("stat for non-existant partition: %v", part)
+	}
+	return autoscaler.Stat(stat)
 }
 
 func (p *pluginServer) Scale(part string, time int64) (rec int32, err error) {

@@ -8,6 +8,7 @@ import (
 	"github.com/josephburnett/sk-plugin/pkg/skplug"
 	"github.com/josephburnett/sk-plugin/pkg/skplug/proto"
 	"k8s.io/apimachinery/pkg/types"
+	av1alpha1 "knative.dev/serving/pkg/apis/autoscaling/v1alpha1"
 	"knative.dev/serving/pkg/autoscaler"
 	"knative.dev/serving/pkg/resources"
 )
@@ -16,10 +17,11 @@ type Autoscaler struct {
 	autoscaler *autoscaler.Autoscaler
 	collector  *autoscaler.MetricCollector
 	pods       map[string]*skplug.Pod
+	stats      map[string]*proto.Stat
 }
 
 func NewAutoscaler(yaml string) (*Autoscaler, error) {
-	// TODO: construct metric collector
+	c := autoscaler.NewMetricCollector(fakeStatsScraperFactory, nil)
 	a, err := autoscaler.New(
 		"default",
 		"autoscaler",
@@ -33,6 +35,7 @@ func NewAutoscaler(yaml string) (*Autoscaler, error) {
 	}
 	return &Autoscaler{
 		autoscaler: a,
+		collector:  c,
 		pods:       make(map[string]*skplug.Pod),
 	}, nil
 }
@@ -83,6 +86,20 @@ func (a *Autoscaler) DeletePod(p *skplug.Pod) error {
 	}
 	delete(a.pods, p.Name)
 	return nil
+}
+
+var _ autoscaler.StatsScraper = &fakeStatsScraper{}
+
+type fakeStatsScraper struct{}
+
+func (f *fakeStatsScraper) Scrape() (*autoscaler.StatMessage, error) {
+	// Don't scrape. Empty messages are ignored.
+	// We record stats when provided by the plugin interface.
+	return nil, nil
+}
+
+func fakeStatsScraperFactory(*av1alpha1.Metric) (autoscaler.StatsScraper, error) {
+	return &fakeStatsScraper{}, nil
 }
 
 var _ autoscaler.MetricClient = &fakeMetricClient{}

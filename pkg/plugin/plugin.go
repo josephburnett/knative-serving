@@ -20,10 +20,10 @@ type Autoscaler struct {
 	autoscaler *autoscaler.Autoscaler
 	collector  *autoscaler.MetricCollector
 	pods       map[string]*skplug.Pod
-	stats      map[string]*proto.Stat
 }
 
 func NewAutoscaler(yaml string) (*Autoscaler, error) {
+	pods := make(map[string]*skplug.Pod)
 	c := autoscaler.NewMetricCollector(fakeStatsScraperFactory, zap.NewNop().Sugar())
 	// TODO: create Metric from PodAutoscaler.
 	metric := &av1alpha1.Metric{
@@ -45,13 +45,15 @@ func NewAutoscaler(yaml string) (*Autoscaler, error) {
 		"default",
 		"autoscaler",
 		c,
-		&fakeReadyPodCounter{}, // TODO: provide count of pods
+		&fakeReadyPodCounter{
+			pods: pods,
+		}, // TODO: provide count of pods
 		autoscaler.DeciderSpec{
 			TickInterval:      2 * time.Second,
-			MaxScaleUpRate:    100.0,
-			TargetConcurrency: 1.0,
-			TotalConcurrency:  1.0,
-			PanicThreshold:    2.0,
+			MaxScaleUpRate:    1000.0,
+			TargetConcurrency: 10.0,
+			TotalConcurrency:  10.0,
+			PanicThreshold:    20.0,
 			StableWindow:      60 * time.Second,
 			ServiceName:       "service",
 		}, // TODO: create Decider from PodAutoscaler.
@@ -63,7 +65,7 @@ func NewAutoscaler(yaml string) (*Autoscaler, error) {
 	return &Autoscaler{
 		autoscaler: a,
 		collector:  c,
-		pods:       make(map[string]*skplug.Pod),
+		pods:       pods,
 	}, nil
 }
 
@@ -147,11 +149,12 @@ func (f *fakeMetricClient) StableAndPanicOPS(key types.NamespacedName, now time.
 var _ resources.ReadyPodCounter = &fakeReadyPodCounter{}
 
 type fakeReadyPodCounter struct {
+	pods map[string]*skplug.Pod
 }
 
 func (f *fakeReadyPodCounter) ReadyCount() (int, error) {
-	// TODO: keep track of pods.
-	return 0, nil
+	// TODO: count ready pods.
+	return len(f.pods), nil
 }
 
 var _ autoscaler.StatsReporter = &fakeStatsReporter{}

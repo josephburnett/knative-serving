@@ -8,7 +8,9 @@ import (
 	"github.com/josephburnett/sk-plugin/pkg/skplug"
 	"github.com/josephburnett/sk-plugin/pkg/skplug/proto"
 	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"knative.dev/serving/pkg/apis/autoscaling/v1alpha1"
 	av1alpha1 "knative.dev/serving/pkg/apis/autoscaling/v1alpha1"
 	"knative.dev/serving/pkg/autoscaler"
 	"knative.dev/serving/pkg/resources"
@@ -23,7 +25,19 @@ type Autoscaler struct {
 
 func NewAutoscaler(yaml string) (*Autoscaler, error) {
 	c := autoscaler.NewMetricCollector(fakeStatsScraperFactory, zap.NewNop().Sugar())
-	err := c.CreateOrUpdate(&av1alpha1.Metric{})
+	// TODO: create Metric from PodAutoscaler.
+	metric := &av1alpha1.Metric{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "autoscaler",
+		},
+		Spec: v1alpha1.MetricSpec{
+			StableWindow: 60 * time.Second,
+			PanicWindow:  6 * time.Second,
+			ScrapeTarget: "service",
+		},
+	}
+	err := c.CreateOrUpdate(metric)
 	if err != nil {
 		return nil, err
 	}
@@ -31,8 +45,16 @@ func NewAutoscaler(yaml string) (*Autoscaler, error) {
 		"default",
 		"autoscaler",
 		c,
-		&fakeReadyPodCounter{},   // TODO: provide count of pods
-		autoscaler.DeciderSpec{}, // TODO: parse PodAutoscaler
+		&fakeReadyPodCounter{}, // TODO: provide count of pods
+		autoscaler.DeciderSpec{
+			TickInterval:      2 * time.Second,
+			MaxScaleUpRate:    100.0,
+			TargetConcurrency: 1.0,
+			TotalConcurrency:  1.0,
+			PanicThreshold:    2.0,
+			StableWindow:      60 * time.Second,
+			ServiceName:       "service",
+		}, // TODO: create Decider from PodAutoscaler.
 		&fakeStatsReporter{},
 	)
 	if err != nil {
